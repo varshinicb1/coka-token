@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "277395706746",
+    "project_id": "coka-token",
+    "storage_bucket": "coka-token.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:277395706746:android:7d85a83c94b9e450a57cc3",
+        "android_client_info": {
+          "package_name": "com.coka.coka_billing"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "277395706746-9h3vnlf7ano0b0gu593i2ocrs4ipj7gc.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBpy-mX2UHZ00yWEcrW8GIknDSJwyjmDv4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "277395706746-9h3vnlf7ano0b0gu593i2ocrs4ipj7gc.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

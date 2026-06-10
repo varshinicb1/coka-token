@@ -1,0 +1,24 @@
+# Only track the current Flutter app
+/*
+!/app
+/app/*
+!/app/coka_billing
+
+# Flutter build output
+/app/coka_billing/build/
+/app/coka_billing/.dart_tool/
+/app/coka_billing/.pub-cache/
+/app/coka_billing/.packages
+/app/coka_billing/.flutter-plugins
+/app/coka_billing/.flutter-plugins-dependencies
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+
+# OS
+.DS_Store
+Thumbs.db
