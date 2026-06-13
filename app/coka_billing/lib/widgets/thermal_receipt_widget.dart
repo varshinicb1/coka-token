@@ -5,8 +5,9 @@ import '../theme/app_colors.dart';
 
 class ThermalReceiptWidget extends StatelessWidget {
   final Order order;
+  final bool compact;
 
-  const ThermalReceiptWidget({super.key, required this.order});
+  const ThermalReceiptWidget({super.key, required this.order, this.compact = false});
 
   @override
   Widget build(BuildContext context) {
@@ -14,7 +15,7 @@ class ThermalReceiptWidget extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(compact ? 12 : 16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -22,41 +23,34 @@ class ThermalReceiptWidget extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Header
+          if (order.isRefunded)
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
+              margin: const EdgeInsets.only(bottom: 8),
+              decoration: BoxDecoration(
+                color: AppColors.errorRed,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: const Text('REFUNDED', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 2)),
+            ),
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: EdgeInsets.all(compact ? 8 : 12),
             decoration: BoxDecoration(
               color: AppColors.cokaRed,
               borderRadius: BorderRadius.circular(8),
             ),
             child: Column(
               children: [
-                const Text(
-                  'COKA',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 2,
-                  ),
-                ),
-                Text(
-                  'COIMBATORE ORIGINAL KAALAN ADDA',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.8),
-                    fontSize: 8,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1,
-                  ),
-                ),
+                Text('COKA',
+                    style: TextStyle(color: Colors.white, fontSize: compact ? 16 : 20, fontWeight: FontWeight.w900, letterSpacing: 2)),
+                Text('COIMBATORE ORIGINAL KAALAN ADDA',
+                    style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: compact ? 7 : 8, fontWeight: FontWeight.bold, letterSpacing: 1)),
               ],
             ),
           ),
-          const SizedBox(height: 12),
-
-          // Token Number
+          const SizedBox(height: compact ? 8 : 12),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            padding: EdgeInsets.symmetric(horizontal: compact ? 16 : 24, vertical: compact ? 8 : 12),
             decoration: BoxDecoration(
               color: Colors.grey[100],
               borderRadius: BorderRadius.circular(8),
@@ -64,32 +58,21 @@ class ThermalReceiptWidget extends StatelessWidget {
             ),
             child: Column(
               children: [
-                Text(
-                  'TOKEN #${order.tokenNumber}',
-                  style: const TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.cokaRed,
-                    letterSpacing: 1,
-                  ),
-                ),
+                Text('TOKEN #${order.tokenNumber}',
+                    style: TextStyle(fontSize: compact ? 24 : 32, fontWeight: FontWeight.w900, color: order.isRefunded ? AppColors.errorRed : AppColors.cokaRed, letterSpacing: 1)),
                 const SizedBox(height: 4),
-                Text(
-                  '${order.dateString}  |  ${_formatTime(order.timestamp)}',
-                  style: TextStyle(fontSize: 10, color: Colors.grey[600]),
-                ),
+                Text('${order.dateString}  |  ${_formatTime(order.timestamp)}',
+                    style: TextStyle(fontSize: compact ? 9 : 10, color: Colors.grey[600])),
               ],
             ),
           ),
-          const SizedBox(height: 12),
-
-          // Items Table Header
+          const SizedBox(height: compact ? 8 : 12),
           Row(
             children: [
-              Expanded(flex: 3, child: Text('Item', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey[600]))),
-              Expanded(child: Text('Qty', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey[600]), textAlign: TextAlign.center)),
-              Expanded(child: Text('Rate', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey[600]), textAlign: TextAlign.right)),
-              Expanded(child: Text('Amt', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey[600]), textAlign: TextAlign.right)),
+              Expanded(flex: 3, child: Text('Item', style: TextStyle(fontSize: compact ? 9 : 10, fontWeight: FontWeight.bold, color: Colors.grey[600]))),
+              Expanded(child: Text('Qty', style: TextStyle(fontSize: compact ? 9 : 10, fontWeight: FontWeight.bold, color: Colors.grey[600]), textAlign: TextAlign.center)),
+              Expanded(child: Text('Rate', style: TextStyle(fontSize: compact ? 9 : 10, fontWeight: FontWeight.bold, color: Colors.grey[600]), textAlign: TextAlign.right)),
+              Expanded(child: Text('Amt', style: TextStyle(fontSize: compact ? 9 : 10, fontWeight: FontWeight.bold, color: Colors.grey[600]), textAlign: TextAlign.right)),
             ],
           ),
           const Divider(thickness: 1),
@@ -97,33 +80,29 @@ class ThermalReceiptWidget extends StatelessWidget {
             padding: const EdgeInsets.symmetric(vertical: 2),
             child: Row(
               children: [
-                Expanded(flex: 3, child: Text(item.name, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500))),
-                Expanded(child: Text('${item.quantity}', style: const TextStyle(fontSize: 11), textAlign: TextAlign.center)),
-                Expanded(child: Text('₹${item.rate.toStringAsFixed(0)}', style: const TextStyle(fontSize: 11), textAlign: TextAlign.right)),
-                Expanded(child: Text('₹${(item.rate * item.quantity).toStringAsFixed(0)}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600), textAlign: TextAlign.right)),
+                Expanded(flex: 3, child: Text(item.name, style: TextStyle(fontSize: compact ? 10 : 11, fontWeight: FontWeight.w500))),
+                Expanded(child: Text('${item.quantity}', style: TextStyle(fontSize: compact ? 10 : 11), textAlign: TextAlign.center)),
+                Expanded(child: Text('\u20B9${item.rate.toStringAsFixed(0)}', style: TextStyle(fontSize: compact ? 10 : 11), textAlign: TextAlign.right)),
+                Expanded(child: Text('\u20B9${(item.rate * item.quantity).toStringAsFixed(0)}', style: TextStyle(fontSize: compact ? 10 : 11, fontWeight: FontWeight.w600), textAlign: TextAlign.right)),
               ],
             ),
           )),
           const Divider(thickness: 1),
-
-          // Totals
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             const Text('Subtotal', style: TextStyle(fontSize: 12)),
-            Text('₹${order.subTotal.toStringAsFixed(2)}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+            Text('\u20B9${order.subTotal.toStringAsFixed(2)}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
           ]),
           const SizedBox(height: 2),
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             const Text('GST (5%)', style: TextStyle(fontSize: 12)),
-            Text('₹${order.taxAmount.toStringAsFixed(2)}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+            Text('\u20B9${order.taxAmount.toStringAsFixed(2)}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
           ]),
           const Divider(thickness: 2),
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             const Text('TOTAL', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
-            Text('₹${order.totalAmount.toStringAsFixed(2)}', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: theme.colorScheme.primary)),
+            Text('\u20B9${order.totalAmount.toStringAsFixed(2)}', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: order.isRefunded ? AppColors.errorRed : theme.colorScheme.primary)),
           ]),
           const SizedBox(height: 8),
-
-          // Payment Info
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
@@ -140,21 +119,53 @@ class ThermalReceiptWidget extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-
-          // Footer
-          Text(
-            'Thank you! Visit Again!',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              color: theme.colorScheme.primary,
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _qrPixel(Colors.black),
+                    const SizedBox(width: 2),
+                    _qrPixel(Colors.black),
+                    _qrPixel(Colors.white),
+                    _qrPixel(Colors.black),
+                    _qrPixel(Colors.black),
+                    const SizedBox(width: 2),
+                    _qrPixel(Colors.black),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text('SCAN TO PAY', style: TextStyle(fontSize: 8, color: Colors.grey[500], letterSpacing: 2, fontWeight: FontWeight.bold)),
+              ],
             ),
           ),
-          Text(
-            'Operator: ${order.operatorName}',
-            style: TextStyle(fontSize: 9, color: Colors.grey[500]),
-          ),
+          const SizedBox(height: 8),
+          Text('Thank you! Visit Again!',
+              style: TextStyle(fontSize: compact ? 10 : 12, fontWeight: FontWeight.bold, color: theme.colorScheme.primary)),
+          Text('Operator: ${order.operatorName}', style: TextStyle(fontSize: compact ? 8 : 9, color: Colors.grey[500])),
+          if (order.isRefunded)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text('REFUNDED ORDER', style: TextStyle(fontSize: 9, color: AppColors.errorRed, fontWeight: FontWeight.bold, letterSpacing: 1)),
+            ),
         ],
+      ),
+    );
+  }
+
+  Widget _qrPixel(Color color) {
+    return Container(
+      width: 6,
+      height: 6,
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(1),
       ),
     );
   }

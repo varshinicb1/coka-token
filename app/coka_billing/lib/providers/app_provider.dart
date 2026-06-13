@@ -670,4 +670,38 @@ class AppProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  List<Map<String, dynamic>> getBestSellers({int limit = 5, String? period}) {
+    final orders = _orders.where((o) => !o.isRefunded && (period == null || o.dateString == period)).toList();
+    final Map<String, int> itemQty = {};
+    final Map<String, double> itemRevenue = {};
+
+    for (final order in orders) {
+      final items = CartSerializer.deserialize(order.itemsText);
+      for (final item in items) {
+        itemQty.update(item.name, (v) => v + item.quantity, ifAbsent: () => item.quantity);
+        itemRevenue.update(item.name, (v) => v + item.total, ifAbsent: () => item.total);
+      }
+    }
+
+    final sorted = itemQty.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    return sorted.take(limit).map((e) => <String, dynamic>{
+      'name': e.key,
+      'quantity': e.value,
+      'revenue': itemRevenue[e.key] ?? 0.0,
+    }).toList();
+  }
+
+  List<Map<String, dynamic>> getLowStockItems() {
+    return _menuItems
+      .where((item) => item.remainingStock > 0 && item.remainingStock <= 5)
+      .map((item) => <String, dynamic>{
+        'name': item.name,
+        'remaining': item.remainingStock,
+        'opening': item.openingStock,
+      })
+      .toList();
+  }
+
+  int get todayOrderCount => _orders.where((o) => o.dateString == date_utils.DateUtils.getTodayDateString() && !o.isRefunded).length;
 }
