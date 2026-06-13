@@ -24,7 +24,7 @@ class FirebaseConfig {
   static const String webClientId = 'YOUR_WEB_CLIENT_ID';
 
   // Check if Firebase is configured (not using placeholder values)
-  static bool get isConfigured => projectId == 'coka-token';
+  static bool get isConfigured => !webClientId.contains('YOUR_');
 
   // Android client ID for Google Sign-In (from google-services.json)
   static const String androidClientId = '277395706746-9h3vnlf7ano0b0gu593i2ocrs4ipj7gc.apps.googleusercontent.com';

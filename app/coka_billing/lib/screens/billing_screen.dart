@@ -287,10 +287,7 @@ class BillingScreen extends StatelessWidget {
 
                   // Token Input
                   TextField(
-                    controller: TextEditingController.fromValue(
-                      TextEditingValue(text: provider.tokenInput),
-                    ),
-                    onChanged: provider.setTokenInput,
+                    controller: provider.tokenController,
                     keyboardType: TextInputType.number,
                     decoration: InputDecoration(
                       labelText: 'Token #',

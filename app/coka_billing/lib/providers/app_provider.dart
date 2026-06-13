@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:csv/csv.dart';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 import '../database/app_database.dart';
@@ -16,6 +18,11 @@ import '../services/bluetooth_printer_service.dart';
 import '../config/firebase_config.dart';
 import '../services/firebase_auth_service.dart';
 
+
+String _hashPassword(String password) {
+  final bytes = utf8.encode(password);
+  return sha256.convert(bytes).toString();
+}
 
 class AppProvider extends ChangeNotifier {
   final AppDatabase _db = AppDatabase();
@@ -45,6 +52,7 @@ class AppProvider extends ChangeNotifier {
   // Cart
   List<CartItem> _cart = [];
   String _tokenInput = '';
+  final TextEditingController tokenController = TextEditingController();
   String _selectedPaymentMethod = 'UPI';
   Order? _activeOrderForReceipt;
 
@@ -170,7 +178,7 @@ class AppProvider extends ChangeNotifier {
       }
 
       final localUser = await _db.getUser(email);
-      if (localUser != null && localUser.passwordHash == password) {
+      if (localUser != null && localUser.passwordHash == _hashPassword(password)) {
         _currentUser = localUser;
         _loginError = null;
         _currentScreen = 'BILLING';
@@ -205,7 +213,7 @@ class AppProvider extends ChangeNotifier {
       if (existing != null) {
         _loginError = 'User already exists!';
       } else {
-        final newUser = User(username: email, passwordHash: password, role: 'ADMIN');
+        final newUser = User(username: email, passwordHash: _hashPassword(password), role: 'ADMIN');
         await _db.insertUser(newUser);
         _currentUser = newUser;
         _registrationSuccess = 'User registered successfully!';
@@ -235,7 +243,7 @@ class AppProvider extends ChangeNotifier {
       final existing = _cart[idx];
       _cart[idx] = existing.copyWith(quantity: existing.quantity + quantity);
     } else {
-      _cart.add(CartItem(name: item.name, rate: item.rate, quantity: quantity));
+      _cart.add(CartItem(itemId: item.id, name: item.name, rate: item.rate, quantity: quantity));
     }
     notifyListeners();
   }
@@ -260,6 +268,7 @@ class AppProvider extends ChangeNotifier {
 
   void setTokenInput(String value) {
     _tokenInput = value;
+    tokenController.text = value;
     notifyListeners();
   }
 
@@ -279,13 +288,17 @@ class AppProvider extends ChangeNotifier {
       nextToken = maxToken + 1;
     }
     _tokenInput = nextToken.toString();
+    tokenController.text = _tokenInput;
     notifyListeners();
   }
 
   Future<void> checkout({String? paymentMethodOverride, String? gatewayTxnId, String? gatewayStatus = 'SUCCESS', bool autoPrint = false}) async {
     if (_cart.isEmpty) return;
+    if (_cart.any((item) => item.quantity <= 0)) return;
 
     final enteredToken = _tokenInput.trim().isEmpty ? '1' : _tokenInput.trim();
+    final tokenNum = int.tryParse(enteredToken.replaceAll(RegExp(r'[^0-9]'), ''));
+    if (tokenNum == null || tokenNum < 1) return;
     final finalPayment = paymentMethodOverride ?? _selectedPaymentMethod;
     final finalTxnId = gatewayTxnId ?? switch (finalPayment) {
       'UPI' => 'UTR420${DateTime.now().millisecondsSinceEpoch % 1000000000}',
@@ -425,6 +438,7 @@ class AppProvider extends ChangeNotifier {
   // EOD
   Future<void> endOfDayReset() async {
     _tokenInput = '1';
+    tokenController.text = '1';
     notifyListeners();
   }
 
@@ -591,6 +605,7 @@ class AppProvider extends ChangeNotifier {
     _isEodInProgress = true;
     notifyListeners();
     _tokenInput = '1';
+    tokenController.text = '1';
     await refreshData();
     _isEodInProgress = false;
     notifyListeners();

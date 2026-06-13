@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' as p;
 import '../models/user.dart';
@@ -100,7 +102,8 @@ class AppDatabase {
     final userCount =
         (await db.rawQuery('SELECT COUNT(*) as c FROM users')).first['c'] as int;
     if (userCount == 0) {
-      await db.insert('users', User(username: 'admin', passwordHash: 'admin', role: 'ADMIN').toMap());
+      final hash = sha256.convert(utf8.encode('admin')).toString();
+      await db.insert('users', User(username: 'admin', passwordHash: hash, role: 'ADMIN').toMap());
     }
 
     final itemCount =
@@ -210,6 +213,20 @@ class AppDatabase {
     await db.delete('orders');
   }
 
+  Future<MenuItem?> _findMenuItem(List<MenuItem> items, int? itemId, String name) {
+    if (itemId != null) {
+      final byId = items.cast<MenuItem?>().firstWhere(
+        (i) => i!.id == itemId,
+        orElse: () => null,
+      );
+      if (byId != null) return byId;
+    }
+    return items.cast<MenuItem?>().firstWhere(
+      (i) => i!.name.toLowerCase().trim() == name.toLowerCase().trim(),
+      orElse: () => null,
+    );
+  }
+
   Future<void> _adjustStockForOrder(String itemsText) async {
     if (itemsText.isEmpty) return;
     final items = itemsText.split('|');
@@ -220,12 +237,10 @@ class AppDatabase {
       if (parts.length < 2) continue;
       final name = parts[0];
       final qty = int.tryParse(parts[1]) ?? 0;
+      final itemId = parts.length >= 4 ? int.tryParse(parts[3]) : null;
       if (qty <= 0) continue;
 
-      final match = allItems.cast<MenuItem?>().firstWhere(
-        (i) => i!.name.toLowerCase().trim() == name.toLowerCase().trim(),
-        orElse: () => null,
-      );
+      final match = _findMenuItem(allItems, itemId, name);
       if (match != null) {
         final newUsed = match.usedStock + qty;
         final newRemaining = (match.openingStock - newUsed).clamp(0, match.openingStock);
@@ -244,12 +259,10 @@ class AppDatabase {
       if (parts.length < 2) continue;
       final name = parts[0];
       final qty = int.tryParse(parts[1]) ?? 0;
+      final itemId = parts.length >= 4 ? int.tryParse(parts[3]) : null;
       if (qty <= 0) continue;
 
-      final match = allItems.cast<MenuItem?>().firstWhere(
-        (i) => i!.name.toLowerCase().trim() == name.toLowerCase().trim(),
-        orElse: () => null,
-      );
+      final match = _findMenuItem(allItems, itemId, name);
       if (match != null) {
         final newUsed = (match.usedStock - qty).clamp(0, match.openingStock);
         final newRemaining = (match.openingStock - newUsed).clamp(0, match.openingStock);

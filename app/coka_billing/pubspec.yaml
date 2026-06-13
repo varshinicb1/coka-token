@@ -46,6 +46,9 @@ dependencies:
   # File picker for CSV import
   file_picker: ^8.0.0
 
+  # Password hashing
+  crypto: ^3.0.6
+
   # Toast/Snackbar
   fluttertoast: ^8.2.12
 

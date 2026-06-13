@@ -2,7 +2,7 @@ import '../models/cart_item.dart';
 
 class CartSerializer {
   static String serialize(List<CartItem> items) {
-    return items.map((e) => '${e.name}*${e.quantity}*${e.rate}').join('|');
+    return items.map((e) => '${e.name}*${e.quantity}*${e.rate}*${e.itemId ?? ''}').join('|');
   }
 
   static List<CartItem> deserialize(String itemsText) {
@@ -14,6 +14,7 @@ class CartSerializer {
           name: segments[0],
           quantity: int.tryParse(segments[1]) ?? 1,
           rate: double.tryParse(segments[2]) ?? 0.0,
+          itemId: segments.length >= 4 ? int.tryParse(segments[3]) : null,
         );
       }
       return null;
