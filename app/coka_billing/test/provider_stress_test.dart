@@ -135,8 +135,7 @@ void main() {
       for (int i = 0; i < 100; i++) {
         final lines = ReceiptFormatter.generateReceiptLines(order);
         expect(lines.length, greaterThan(0));
-        expect(lines.any((l) => l.contains('1-UP')), true);
-        expect(lines.any((l) => l.contains('MARIO')), true);
+        expect(lines.any((l) => l.contains('(M)')), true);
         expect(lines.any((l) => l.contains('Rs.')), true);
       }
     });
@@ -158,7 +157,7 @@ void main() {
       for (int i = 0; i < 100; i++) {
         final lines = ReceiptFormatter.generateKotLines(order);
         expect(lines.length, greaterThan(0));
-        expect(lines.any((l) => l.contains('MARIO KITCHEN')), true);
+        expect(lines.any((l) => l.contains('KITCHEN')), true);
       }
     });
   });

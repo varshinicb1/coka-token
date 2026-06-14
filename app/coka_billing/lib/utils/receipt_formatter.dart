@@ -5,32 +5,30 @@ class ReceiptFormatter {
   static List<String> generateReceiptLines(Order order) {
     final items = CartSerializer.deserialize(order.itemsText);
     final lines = <String>[];
-    lines.add('##############################');
-    lines.add('#    MARIO  x  COKA         #');
-    lines.add('#  Coimbatore Original      #');
-    lines.add('#  Kaalan Adda              #');
-    lines.add('#  ${order.dateString}  ${_formatTime(order.timestamp)}  #');
-    lines.add('##############################');
-    lines.add('#      ★ TOKEN #${order.tokenNumber.padRight(10)}★     #');
-    lines.add('##############################');
+    lines.add('==============================');
+    lines.add('          COKA (M)');
+    lines.add('   Coimbatore Original');
+    lines.add('     Kaalan Adda');
+    lines.add('  ${order.dateString}  ${_formatTime(order.timestamp)}');
+    lines.add('==============================');
+    lines.add('       TOKEN #${order.tokenNumber}');
+    lines.add('==============================');
     lines.add('');
-    lines.add('ITEM           QTY    AMOUNT');
-    lines.add('~~~~  ~~~~  ~~~~  ~~~~~~~~');
+    lines.add('Item              Qty  Amt');
     for (final item in items) {
       final name = item.name;
-      final qtyStr = item.quantity.toString().padLeft(3);
-      final amtStr = 'Rs.${(item.rate * item.quantity).toStringAsFixed(0).padLeft(5)}';
-      if (name.length > 14) {
+      final rateLine = '${item.quantity.toString().padLeft(3)}  Rs.${(item.rate * item.quantity).toStringAsFixed(0).padLeft(5)}';
+      if (name.length > 16) {
         lines.add(name);
-        lines.add('${''.padRight(14)} $qtyStr  $amtStr');
+        lines.add('${''.padRight(16)} $rateLine');
       } else {
-        lines.add('${name.padRight(14)} $qtyStr  $amtStr');
+        lines.add('${name.padRight(16)} $rateLine');
       }
     }
-    lines.add('-----[#]-----[#]-----[#]-----');
-    lines.add('Subtotal         Rs.${order.subTotal.toStringAsFixed(0).padLeft(7)}');
+    lines.add('--------(M)--------(M)--------');
+    lines.add('Subtotal          Rs.${order.subTotal.toStringAsFixed(0).padLeft(7)}');
     lines.add('------------------------------');
-    lines.add('TOTAL            Rs.${order.totalAmount.toStringAsFixed(0).padLeft(7)}');
+    lines.add('TOTAL             Rs.${order.totalAmount.toStringAsFixed(0).padLeft(7)}');
     lines.add('------------------------------');
     lines.add('Payment: ${order.paymentMethod}');
     if (order.gatewayTransactionId != null) {
@@ -38,9 +36,10 @@ class ReceiptFormatter {
     }
     lines.add('------------------------------');
     lines.add('');
-    lines.add('     ★ THANK YOU! ★');
-    lines.add('   1-UP! VISIT AGAIN!');
-    lines.add('##############################');
+    lines.add('      (M) Thank You!');
+    lines.add('   (M) VISIT AGAIN (M)');
+    lines.add('==============================');
+    lines.add('    (M)      (M)      (M)');
     lines.add('');
     return lines;
   }
@@ -48,19 +47,21 @@ class ReceiptFormatter {
   static List<String> generateKotLines(Order order) {
     final items = CartSerializer.deserialize(order.itemsText);
     final lines = <String>[];
-    lines.add('##############################');
-    lines.add('#      MARIO KITCHEN         #');
-    lines.add('#  Coimbatore Original      #');
-    lines.add('#  Kaalan Adda              #');
-    lines.add('##############################');
-    lines.add('#     ★ TOKEN #${order.tokenNumber.padRight(10)}★    #');
-    lines.add('##############################');
+    lines.add('==============================');
+    lines.add('      KITCHEN KOT (M)');
+    lines.add('   Coimbatore Original');
+    lines.add('     Kaalan Adda');
+    lines.add('==============================');
+    lines.add('      TOKEN #${order.tokenNumber}');
+    lines.add('------------------------------');
     for (final item in items) {
       lines.add('${item.name} x${item.quantity}');
     }
-    lines.add('-----[#]-----[#]-----[#]-----');
+    lines.add('--------(M)--------(M)--------');
     lines.add(_formatTime(order.timestamp));
-    lines.add('##############################');
+    lines.add('------------------------------');
+    lines.add('         *** KOT ***');
+    lines.add('==============================');
     lines.add('');
     lines.add('');
     return lines;

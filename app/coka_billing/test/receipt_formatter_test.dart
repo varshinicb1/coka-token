@@ -35,19 +35,19 @@ Order _createOrder({
 void main() {
   group('ReceiptFormatter', () {
     group('generateReceiptLines', () {
-      test('includes Mario themed header', () {
+      test('includes COKA header with mushroom', () {
         final order = _createOrder();
         final lines = ReceiptFormatter.generateReceiptLines(order);
-        expect(lines[0], '##############################');
-        expect(lines[1], '#    MARIO  x  COKA         #');
-        expect(lines[2], '#  Coimbatore Original      #');
+        expect(lines[0], '==============================');
+        expect(lines[1], '          COKA (M)');
+        expect(lines[2], '   Coimbatore Original');
+        expect(lines[3], '     Kaalan Adda');
       });
 
-      test('includes token number with stars', () {
+      test('includes token number', () {
         final order = _createOrder(token: 'B3');
         final lines = ReceiptFormatter.generateReceiptLines(order);
         expect(lines, contains(contains('TOKEN #B3')));
-        expect(lines, contains(contains('★')));
       });
 
       test('includes date and time', () {
@@ -72,6 +72,12 @@ void main() {
         final lines = ReceiptFormatter.generateReceiptLines(order);
         final nameLine = lines.firstWhere((l) => l.contains('ExtraLongBurgerName'));
         expect(nameLine, 'ExtraLongBurgerName');
+      });
+
+      test('includes mushroom separators', () {
+        final order = _createOrder();
+        final lines = ReceiptFormatter.generateReceiptLines(order);
+        expect(lines, contains(contains('(M)')));
       });
 
       test('includes subtotal and total', () {
@@ -105,12 +111,17 @@ void main() {
         expect(lines.where((l) => l.contains('Txn:')).length, 0);
       });
 
-      test('includes Mario themed footer', () {
+      test('includes Thank You and mushroom footer', () {
         final order = _createOrder();
         final lines = ReceiptFormatter.generateReceiptLines(order);
-        expect(lines, contains(contains('THANK YOU')));
-        expect(lines, contains(contains('1-UP')));
-        expect(lines.lastWhere((l) => l.contains('#')), '##############################');
+        expect(lines, contains(contains('Thank You')));
+        expect(lines, contains(contains('VISIT AGAIN')));
+      });
+
+      test('ends with mushrooms line', () {
+        final order = _createOrder();
+        final lines = ReceiptFormatter.generateReceiptLines(order);
+        expect(lines[lines.length - 2], contains('(M)'));
       });
 
       test('returns consistent line count', () {
@@ -121,17 +132,16 @@ void main() {
     });
 
     group('generateKotLines', () {
-      test('includes Mario KOT header', () {
+      test('includes KOT header with mushroom', () {
         final order = _createOrder();
         final lines = ReceiptFormatter.generateKotLines(order);
-        expect(lines[1], '#      MARIO KITCHEN         #');
+        expect(lines[1], '      KITCHEN KOT (M)');
       });
 
-      test('includes token number with stars', () {
+      test('includes token number', () {
         final order = _createOrder(token: 'C5');
         final lines = ReceiptFormatter.generateKotLines(order);
         expect(lines, contains(contains('TOKEN #C5')));
-        expect(lines, contains(contains('★')));
       });
 
       test('lists each item with qty', () {
@@ -153,7 +163,13 @@ void main() {
       test('ends with hash border', () {
         final order = _createOrder();
         final lines = ReceiptFormatter.generateKotLines(order);
-        expect(lines, contains(contains('##############################')));
+        expect(lines, contains(contains('==============================')));
+      });
+
+      test('includes mushroom separator in KOT', () {
+        final order = _createOrder();
+        final lines = ReceiptFormatter.generateKotLines(order);
+        expect(lines, contains(contains('(M)')));
       });
     });
   });
