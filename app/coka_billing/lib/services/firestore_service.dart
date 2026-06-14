@@ -19,14 +19,8 @@ class FirestoreService {
 
   Future<void> init() async {
     if (!FirebaseConfig.isConfigured) return;
-    try {
-      await FirebaseFirestore.instance.collection('_health').doc('check').get();
-      _initialized = true;
-      _log.info('Firestore initialized');
-    } catch (e, st) {
-      _log.warning('Firestore not available', e, st);
-      _initialized = false;
-    }
+    _initialized = true;
+    _log.info('Firestore service ready');
   }
 
   void dispose() {
