@@ -535,11 +535,14 @@ class ReceiptActionsDialog extends StatelessWidget {
             const SizedBox(height: 24),
             FilledButton.icon(
               onPressed: () async {
-                await provider.printOrderReceipt(order);
+                Navigator.of(context).pop();
+                final success = await provider.printOrderReceipt(order);
                 if (context.mounted) {
-                  Navigator.of(context).pop();
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Receipt sent to printer')),
+                    SnackBar(
+                      content: Text(success ? 'Receipt sent to printer' : 'Print failed - check Bluetooth connection'),
+                      backgroundColor: success ? null : AppColors.errorRed,
+                    ),
                   );
                 }
               },

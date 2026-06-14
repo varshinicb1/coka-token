@@ -3,6 +3,8 @@ import '../providers/app_provider.dart';
 import '../theme/app_colors.dart';
 import '../widgets/stat_card.dart';
 import '../utils/date_utils.dart' as date_utils;
+import '../utils/cart_serializer.dart';
+import '../models/order.dart';
 
 class ReportsScreen extends StatefulWidget {
   final AppProvider provider;
@@ -320,6 +322,22 @@ class _ReportsScreenState extends State<ReportsScreen>
             ),
           ),
           const SizedBox(height: 20),
+          Text(
+            'Best Sellers',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+              color: theme.colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: _buildBestSellerList(context, filtered),
+            ),
+          ),
+          const SizedBox(height: 20),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
@@ -363,6 +381,60 @@ class _ReportsScreenState extends State<ReportsScreen>
         const SizedBox(width: 6),
         Text(label, style: const TextStyle(fontSize: 12)),
       ],
+    );
+  }
+
+  Widget _buildBestSellerList(BuildContext context, List<dynamic> filtered) {
+    final theme = Theme.of(context);
+    final Map<String, int> qtyMap = {};
+    final Map<String, double> revMap = {};
+    for (final order in filtered) {
+      final items = CartSerializer.deserialize((order as Order).itemsText);
+      for (final item in items) {
+        qtyMap.update(item.name, (v) => v + item.quantity, ifAbsent: () => item.quantity);
+        revMap.update(item.name, (v) => v + item.total, ifAbsent: () => item.total);
+      }
+    }
+    final sorted = qtyMap.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    final topItems = sorted.take(5);
+
+    if (topItems.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 24),
+        child: Center(
+          child: Text('No sales data yet', style: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.4))),
+        ),
+      );
+    }
+
+    return Column(
+      children: topItems.map((e) {
+        final qty = e.value;
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 24,
+                child: Text(
+                  '${topItems.toList().indexOf(e) + 1}.',
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: theme.colorScheme.primary),
+                ),
+              ),
+              Expanded(
+                flex: 3,
+                child: Text(e.key, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500), maxLines: 1, overflow: TextOverflow.ellipsis),
+              ),
+              Expanded(
+                child: Text('x$qty', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: theme.colorScheme.primary), textAlign: TextAlign.center),
+              ),
+              Expanded(
+                child: Text('\u20B9${revMap[e.key]?.toStringAsFixed(0) ?? '0'}', style: const TextStyle(fontSize: 11), textAlign: TextAlign.right),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
     );
   }
 

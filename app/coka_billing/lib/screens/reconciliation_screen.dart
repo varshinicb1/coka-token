@@ -294,12 +294,14 @@ class BankReconciliationScreen extends StatelessWidget {
   }
 
   Future<void> _importCsv(BuildContext context) async {
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['csv'],
+      withData: true,
     );
-    if (result != null && result.files.single.path != null) {
-      await provider.importBankStatementCsv(result.files.single.path!);
+    if (result != null && result.files.single.bytes != null) {
+      final content = String.fromCharCodes(result.files.single.bytes!);
+      await provider.importBankStatementCsv(content);
     }
   }
 }

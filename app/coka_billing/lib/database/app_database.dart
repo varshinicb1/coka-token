@@ -1,7 +1,10 @@
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
-import 'package:sqflite/sqflite.dart';
+import 'package:sembast/sembast.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:flutter/foundation.dart';
+import '../platform/db_factory.dart';
 import '../models/user.dart';
 import '../models/menu_item.dart';
 import '../models/order.dart';
@@ -20,94 +23,32 @@ class AppDatabase {
     return _database!;
   }
 
+  final userStore = stringMapStoreFactory.store('users');
+  final menuItemStore = intMapStoreFactory.store('menu_items');
+  final orderStore = intMapStoreFactory.store('orders');
+  final expenseStore = intMapStoreFactory.store('expenses');
+
   Future<Database> _initDatabase() async {
-    final dbPath = await getDatabasesPath();
-    final path = p.join(dbPath, 'coka_billing.db');
-
-    return await openDatabase(
-      path,
-      version: 3,
-      onCreate: _onCreate,
-      onUpgrade: _onUpgrade,
-    );
-  }
-
-  Future<void> _onCreate(Database db, int version) async {
-    await db.execute('''
-      CREATE TABLE users (
-        username TEXT PRIMARY KEY,
-        passwordHash TEXT NOT NULL,
-        role TEXT NOT NULL
-      )
-    ''');
-
-    await db.execute('''
-      CREATE TABLE menu_items (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        rate REAL NOT NULL,
-        category TEXT NOT NULL,
-        openingStock INTEGER NOT NULL,
-        usedStock INTEGER NOT NULL DEFAULT 0,
-        remainingStock INTEGER NOT NULL DEFAULT 0,
-        description TEXT NOT NULL DEFAULT ''
-      )
-    ''');
-
-    await db.execute('''
-      CREATE TABLE orders (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        tokenNumber TEXT NOT NULL,
-        itemsText TEXT NOT NULL,
-        subTotal REAL NOT NULL,
-        taxAmount REAL NOT NULL,
-        totalAmount REAL NOT NULL,
-        paymentMethod TEXT NOT NULL,
-        timestamp INTEGER NOT NULL,
-        dateString TEXT NOT NULL,
-        operatorName TEXT NOT NULL,
-        isRefunded INTEGER NOT NULL DEFAULT 0,
-        gatewayTransactionId TEXT,
-        gatewayStatus TEXT,
-        reconciled INTEGER NOT NULL DEFAULT 0,
-        reconciledAt INTEGER NOT NULL DEFAULT 0,
-        bankStatementMatchId TEXT
-      )
-    ''');
-
-    await db.execute('''
-      CREATE TABLE expenses (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        description TEXT NOT NULL,
-        amount REAL NOT NULL,
-        timestamp INTEGER NOT NULL,
-        dateString TEXT NOT NULL
-      )
-    ''');
-  }
-
-  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    if (oldVersion < 3) {
-      await db.execute('DROP TABLE IF EXISTS users');
-      await db.execute('DROP TABLE IF EXISTS menu_items');
-      await db.execute('DROP TABLE IF EXISTS orders');
-      await db.execute('DROP TABLE IF EXISTS expenses');
-      await _onCreate(db, newVersion);
+    String dbPath;
+    if (kIsWeb) {
+      dbPath = 'coka_billing';
+    } else {
+      final dir = await getApplicationDocumentsDirectory();
+      dbPath = p.join(dir.path, 'coka_billing.db');
     }
+    return await platformDbFactory.openDatabase(dbPath);
   }
 
   Future<void> prepopulateIfNeeded() async {
     final db = await database;
 
-    final userCount =
-        (await db.rawQuery('SELECT COUNT(*) as c FROM users')).first['c'] as int;
+    final userCount = await userStore.count(db);
     if (userCount == 0) {
       final hash = sha256.convert(utf8.encode('admin')).toString();
-      await db.insert('users', User(username: 'admin', passwordHash: hash, role: 'ADMIN').toMap());
+      await userStore.record('admin').put(db, User(username: 'admin', passwordHash: hash, role: 'ADMIN').toMap());
     }
 
-    final itemCount =
-        (await db.rawQuery('SELECT COUNT(*) as c FROM menu_items')).first['c'] as int;
+    final itemCount = await menuItemStore.count(db);
     if (itemCount == 0) {
       final dishes = [
         MenuItem(name: 'COKA Signature Kaalan', rate: 79.0, category: 'Kaalan Dishes', openingStock: 120, remainingStock: 120, description: 'OG street food superstar'),
@@ -122,7 +63,9 @@ class AppDatabase {
         MenuItem(name: 'Egg Bhel Supreme', rate: 89.0, category: 'Kaalan Snacks', openingStock: 95, remainingStock: 95, description: 'Simple. Crunchy. Satisfying'),
       ];
       for (final dish in dishes) {
-        await db.insert('menu_items', dish.toMap()..remove('id'));
+        final map = dish.toMap();
+        map.remove('id');
+        await menuItemStore.add(db, map);
       }
     }
   }
@@ -130,79 +73,103 @@ class AppDatabase {
   // User operations
   Future<List<User>> getUsers() async {
     final db = await database;
-    final maps = await db.query('users');
-    return maps.map((m) => User.fromMap(m)).toList();
+    final records = await userStore.find(db);
+    return records.map((r) => User.fromMap(r.value)).toList();
   }
 
   Future<User?> getUser(String username) async {
     final db = await database;
-    final maps = await db.query('users', where: 'username = ?', whereArgs: [username]);
-    if (maps.isEmpty) return null;
-    return User.fromMap(maps.first);
+    final record = await userStore.record(username).get(db);
+    if (record == null) return null;
+    return User.fromMap(record);
   }
 
   Future<void> insertUser(User user) async {
     final db = await database;
-    await db.insert('users', user.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+    await userStore.record(user.username).put(db, user.toMap());
   }
 
   Future<void> deleteUser(User user) async {
     final db = await database;
-    await db.delete('users', where: 'username = ?', whereArgs: [user.username]);
+    await userStore.record(user.username).delete(db);
   }
 
   // MenuItem operations
   Future<List<MenuItem>> getMenuItems() async {
     final db = await database;
-    final maps = await db.query('menu_items', orderBy: 'name ASC');
-    return maps.map((m) => MenuItem.fromMap(m)).toList();
+    final records = await menuItemStore.find(db, finder: Finder(sortOrders: [SortOrder('name')]));
+    return records.map((r) {
+      final map = Map<String, dynamic>.from(r.value);
+      map['id'] = r.key;
+      return MenuItem.fromMap(map);
+    }).toList();
   }
 
   Future<MenuItem?> getMenuItemById(int id) async {
     final db = await database;
-    final maps = await db.query('menu_items', where: 'id = ?', whereArgs: [id]);
-    if (maps.isEmpty) return null;
-    return MenuItem.fromMap(maps.first);
+    final record = await menuItemStore.record(id).get(db);
+    if (record == null) return null;
+    final map = Map<String, dynamic>.from(record);
+    map['id'] = id;
+    return MenuItem.fromMap(map);
   }
 
   Future<void> insertMenuItem(MenuItem item) async {
     final db = await database;
-    await db.insert('menu_items', item.toMap()..remove('id'), conflictAlgorithm: ConflictAlgorithm.replace);
+    final map = item.toMap();
+    map.remove('id');
+    await menuItemStore.add(db, map);
   }
 
   Future<void> updateMenuItem(MenuItem item) async {
     final db = await database;
-    await db.update('menu_items', item.toMap()..remove('id'), where: 'id = ?', whereArgs: [item.id]);
+    final map = item.toMap();
+    map.remove('id');
+    await menuItemStore.record(item.id!).put(db, map);
   }
 
   Future<void> deleteMenuItem(MenuItem item) async {
     final db = await database;
-    await db.delete('menu_items', where: 'id = ?', whereArgs: [item.id]);
+    await menuItemStore.record(item.id!).delete(db);
   }
 
   // Order operations
   Future<List<Order>> getOrders() async {
     final db = await database;
-    final maps = await db.query('orders', orderBy: 'timestamp DESC');
-    return maps.map((m) => Order.fromMap(m)).toList();
+    final records = await orderStore.find(db, finder: Finder(sortOrders: [SortOrder('timestamp', false)]));
+    return records.map((r) {
+      final map = Map<String, dynamic>.from(r.value);
+      map['id'] = r.key;
+      return Order.fromMap(map);
+    }).toList();
   }
 
   Future<List<Order>> getOrdersByDate(String dateString) async {
     final db = await database;
-    final maps = await db.query('orders', where: 'dateString = ?', whereArgs: [dateString], orderBy: 'timestamp DESC');
-    return maps.map((m) => Order.fromMap(m)).toList();
+    final records = await orderStore.find(
+      db,
+      finder: Finder(filter: Filter.equals('dateString', dateString), sortOrders: [SortOrder('timestamp', false)]),
+    );
+    return records.map((r) {
+      final map = Map<String, dynamic>.from(r.value);
+      map['id'] = r.key;
+      return Order.fromMap(map);
+    }).toList();
   }
 
   Future<int> insertOrder(Order order) async {
     final db = await database;
-    final id = await db.insert('orders', order.toMap()..remove('id'));
-    await _adjustStockForOrder(order.itemsText);
-    return id;
+    final map = order.toMap();
+    map.remove('id');
+    final key = await orderStore.add(db, map);
+    return key;
   }
 
   Future<void> updateOrder(Order order) async {
     final db = await database;
-    await db.update('orders', order.toMap()..remove('id'), where: 'id = ?', whereArgs: [order.id]);
+    final map = order.toMap();
+    map.remove('id');
+    await orderStore.record(order.id!).put(db, map);
     if (order.isRefunded) {
       await _adjustStockForRefund(order.itemsText);
     }
@@ -210,7 +177,7 @@ class AppDatabase {
 
   Future<void> clearOrders() async {
     final db = await database;
-    await db.delete('orders');
+    await orderStore.delete(db);
   }
 
   Future<MenuItem?> _findMenuItem(List<MenuItem> items, int? itemId, String name) {
@@ -219,34 +186,12 @@ class AppDatabase {
         (i) => i!.id == itemId,
         orElse: () => null,
       );
-      if (byId != null) return byId;
+      if (byId != null) return Future.value(byId);
     }
-    return items.cast<MenuItem?>().firstWhere(
+    return Future.value(items.cast<MenuItem?>().firstWhere(
       (i) => i!.name.toLowerCase().trim() == name.toLowerCase().trim(),
       orElse: () => null,
-    );
-  }
-
-  Future<void> _adjustStockForOrder(String itemsText) async {
-    if (itemsText.isEmpty) return;
-    final items = itemsText.split('|');
-    final allItems = await getMenuItems();
-
-    for (final raw in items) {
-      final parts = raw.split('*');
-      if (parts.length < 2) continue;
-      final name = parts[0];
-      final qty = int.tryParse(parts[1]) ?? 0;
-      final itemId = parts.length >= 4 ? int.tryParse(parts[3]) : null;
-      if (qty <= 0) continue;
-
-      final match = _findMenuItem(allItems, itemId, name);
-      if (match != null) {
-        final newUsed = match.usedStock + qty;
-        final newRemaining = (match.openingStock - newUsed).clamp(0, match.openingStock);
-        await updateMenuItem(match.copyWith(usedStock: newUsed, remainingStock: newRemaining));
-      }
-    }
+    ));
   }
 
   Future<void> _adjustStockForRefund(String itemsText) async {
@@ -262,7 +207,7 @@ class AppDatabase {
       final itemId = parts.length >= 4 ? int.tryParse(parts[3]) : null;
       if (qty <= 0) continue;
 
-      final match = _findMenuItem(allItems, itemId, name);
+      final match = await _findMenuItem(allItems, itemId, name);
       if (match != null) {
         final newUsed = (match.usedStock - qty).clamp(0, match.openingStock);
         final newRemaining = (match.openingStock - newUsed).clamp(0, match.openingStock);
@@ -274,17 +219,23 @@ class AppDatabase {
   // Expense operations
   Future<List<Expense>> getExpenses() async {
     final db = await database;
-    final maps = await db.query('expenses', orderBy: 'timestamp DESC');
-    return maps.map((m) => Expense.fromMap(m)).toList();
+    final records = await expenseStore.find(db, finder: Finder(sortOrders: [SortOrder('timestamp', false)]));
+    return records.map((r) {
+      final map = Map<String, dynamic>.from(r.value);
+      map['id'] = r.key;
+      return Expense.fromMap(map);
+    }).toList();
   }
 
   Future<void> insertExpense(Expense expense) async {
     final db = await database;
-    await db.insert('expenses', expense.toMap()..remove('id'));
+    final map = expense.toMap();
+    map.remove('id');
+    await expenseStore.add(db, map);
   }
 
   Future<void> deleteExpense(Expense expense) async {
     final db = await database;
-    await db.delete('expenses', where: 'id = ?', whereArgs: [expense.id]);
+    await expenseStore.record(expense.id!).delete(db);
   }
 }

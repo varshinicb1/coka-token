@@ -4,6 +4,7 @@ import '../theme/app_colors.dart';
 import '../widgets/stat_card.dart';
 import '../widgets/app_dialogs.dart';
 import '../utils/date_utils.dart' as date_utils;
+import '../models/order.dart';
 
 class TransactionsScreen extends StatefulWidget {
   final AppProvider provider;
@@ -191,6 +192,8 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                                     Text(
                                       '${order.dateString} | ${order.paymentMethod} | ${order.operatorName}${order.isRefunded ? ' | REFUNDED' : ''}',
                                       style: TextStyle(fontSize: 10, color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ],
                                 ),

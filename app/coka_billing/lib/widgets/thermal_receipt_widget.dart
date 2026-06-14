@@ -1,13 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import '../models/order.dart';
 import '../utils/cart_serializer.dart';
+import '../utils/upi_qr.dart';
 import '../theme/app_colors.dart';
 
 class ThermalReceiptWidget extends StatelessWidget {
   final Order order;
   final bool compact;
+  final String upiId;
+  final String merchantName;
 
-  const ThermalReceiptWidget({super.key, required this.order, this.compact = false});
+  const ThermalReceiptWidget({
+    super.key,
+    required this.order,
+    this.compact = false,
+    this.upiId = 'coka@upi',
+    this.merchantName = 'COKA',
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -48,7 +58,7 @@ class ThermalReceiptWidget extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: compact ? 8 : 12),
+          SizedBox(height: compact ? 8 : 12),
           Container(
             padding: EdgeInsets.symmetric(horizontal: compact ? 16 : 24, vertical: compact ? 8 : 12),
             decoration: BoxDecoration(
@@ -66,7 +76,7 @@ class ThermalReceiptWidget extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: compact ? 8 : 12),
+          SizedBox(height: compact ? 8 : 12),
           Row(
             children: [
               Expanded(flex: 3, child: Text('Item', style: TextStyle(fontSize: compact ? 9 : 10, fontWeight: FontWeight.bold, color: Colors.grey[600]))),
@@ -127,45 +137,33 @@ class ThermalReceiptWidget extends StatelessWidget {
             ),
             child: Column(
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _qrPixel(Colors.black),
-                    const SizedBox(width: 2),
-                    _qrPixel(Colors.black),
-                    _qrPixel(Colors.white),
-                    _qrPixel(Colors.black),
-                    _qrPixel(Colors.black),
-                    const SizedBox(width: 2),
-                    _qrPixel(Colors.black),
-                  ],
+                QrImageView(
+                  data: buildUpiQrPayload(
+                    upiId: upiId,
+                    merchantName: merchantName,
+                    amount: order.totalAmount,
+                    transactionRef: 'TOKEN${order.tokenNumber}',
+                  ),
+                  version: QrVersions.auto,
+                  size: compact ? 100 : 130,
+                  backgroundColor: Colors.white,
+                  padding: EdgeInsets.zero,
                 ),
-                const SizedBox(height: 4),
-                Text('SCAN TO PAY', style: TextStyle(fontSize: 8, color: Colors.grey[500], letterSpacing: 2, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 6),
+                Text('SCAN TO PAY', style: TextStyle(fontSize: compact ? 7 : 9, color: Colors.grey[500], letterSpacing: 2, fontWeight: FontWeight.bold)),
+                Text('\u20B9${order.totalAmount.toStringAsFixed(2)}', style: TextStyle(fontSize: compact ? 10 : 12, fontWeight: FontWeight.w700, color: theme.colorScheme.primary)),
               ],
             ),
           ),
           const SizedBox(height: 8),
           Text('Thank you! Visit Again!',
               style: TextStyle(fontSize: compact ? 10 : 12, fontWeight: FontWeight.bold, color: theme.colorScheme.primary)),
-          Text('Operator: ${order.operatorName}', style: TextStyle(fontSize: compact ? 8 : 9, color: Colors.grey[500])),
           if (order.isRefunded)
             Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Text('REFUNDED ORDER', style: TextStyle(fontSize: 9, color: AppColors.errorRed, fontWeight: FontWeight.bold, letterSpacing: 1)),
             ),
         ],
-      ),
-    );
-  }
-
-  Widget _qrPixel(Color color) {
-    return Container(
-      width: 6,
-      height: 6,
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(1),
       ),
     );
   }

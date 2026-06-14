@@ -1,9 +1,8 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:csv/csv.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
+import 'package:logging/logging.dart';
 import '../database/app_database.dart';
 import '../models/user.dart';
 import '../models/menu_item.dart';
@@ -13,11 +12,13 @@ import '../models/cart_item.dart';
 import '../models/bank_statement_item.dart';
 import '../utils/date_utils.dart' as date_utils;
 import '../utils/cart_serializer.dart';
+import '../utils/receipt_formatter.dart';
 import '../services/csv_export_service.dart';
 import '../services/bluetooth_printer_service.dart';
 import '../config/firebase_config.dart';
 import '../services/firebase_auth_service.dart';
 
+final _log = Logger('AppProvider');
 
 String _hashPassword(String password) {
   final bytes = utf8.encode(password);
@@ -70,6 +71,9 @@ class AppProvider extends ChangeNotifier {
   // EOD
   bool _isEodInProgress = false;
 
+  // UPI ID for QR payments
+  String _upiId = 'coka@upi';
+
   // Getters
   bool get isInitialized => _isInitialized;
   User? get currentUser => _currentUser;
@@ -96,6 +100,8 @@ class AppProvider extends ChangeNotifier {
   bool get isFirebaseConfigured => FirebaseConfig.isConfigured;
   String get csvExportMessage => _csvExportMessage;
   bool get isEodInProgress => _isEodInProgress;
+  String get upiId => _upiId;
+  String get upiMerchantName => 'COKA COIMBATORE ORIGINAL KAALAN ADDA';
 
   double get todaySales => _orders.where((o) => o.dateString == date_utils.DateUtils.getTodayDateString() && !o.isRefunded).fold(0.0, (s, o) => s + o.totalAmount);
   double get todayExpensesTotal => _expenses.where((e) => e.dateString == date_utils.DateUtils.getTodayDateString()).fold(0.0, (s, e) => s + e.amount);
@@ -147,6 +153,11 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setUpiId(String id) {
+    _upiId = id;
+    notifyListeners();
+  }
+
   // Navigation
   void navigateTo(String screen) {
     _currentScreen = screen;
@@ -172,8 +183,8 @@ class AppProvider extends ChangeNotifier {
           _isFirebaseLoading = false;
           notifyListeners();
           return;
-        } catch (_) {
-          // Fall through to local auth
+        } catch (e, st) {
+          _log.fine('Firebase login failed, falling back to local auth', e, st);
         }
       }
 
@@ -204,8 +215,8 @@ class AppProvider extends ChangeNotifier {
         try {
           final request = AuthRequest(email: email, password: password);
           await FirebaseAuthService.signUpWithPassword(FirebaseConfig.apiKey, request);
-        } catch (_) {
-          // Fall through to local registration
+        } catch (e, st) {
+          _log.fine('Firebase registration failed, falling back to local', e, st);
         }
       }
 
@@ -321,6 +332,7 @@ class AppProvider extends ChangeNotifier {
     );
 
     await _db.insertOrder(order);
+    await _deductStockForOrder(order.itemsText);
     await refreshData();
     await _resetTokenInputToNextAuto();
 
@@ -517,10 +529,6 @@ class AppProvider extends ChangeNotifier {
     return await _btService.startDiscovery();
   }
 
-  Future<bool> connectToDevice(BluetoothDevice device) async {
-    return await _btService.connect(device);
-  }
-
   void disconnectBluetooth() {
     _btService.disconnect();
     _bluetoothConnected = false;
@@ -537,46 +545,49 @@ class AppProvider extends ChangeNotifier {
     return success;
   }
 
-  List<String> _generateReceiptLines(Order order) {
-    final items = CartSerializer.deserialize(order.itemsText);
-    final lines = <String>[];
-    lines.add('');
-    lines.add('    COKA BILLING');
-    lines.add(' Coimbatore Original');
-    lines.add('    Kaalan Adda');
-    lines.add('======================');
-    lines.add('Token #${order.tokenNumber}');
-    lines.add('${order.dateString}  ${_formatReceiptTime(order.timestamp)}');
-    lines.add('======================');
-    lines.add('');
-    lines.add('ITEM           QTY  AMOUNT');
-    for (final item in items) {
-      final name = item.name.length > 12 ? '${item.name.substring(0, 12)}.' : item.name;
-      lines.add('${name.padRight(12)} ${item.quantity.toString().padLeft(3)}  \u20B9${(item.rate * item.quantity).toStringAsFixed(0).padLeft(5)}');
+  Future<bool> printKot(Order order) async {
+    final lines = _generateKotLines(order);
+    final success = await _btService.printReceipt(lines);
+    if (success) {
+      _bluetoothConnected = true;
+      notifyListeners();
     }
-    lines.add('======================');
-    lines.add('Subtotal   \u20B9${order.subTotal.toStringAsFixed(2).padLeft(8)}');
-    lines.add('GST (5%)   \u20B9${order.taxAmount.toStringAsFixed(2).padLeft(8)}');
-    lines.add('TOTAL      \u20B9${order.totalAmount.toStringAsFixed(2).padLeft(8)}');
-    lines.add('----------------------');
-    lines.add(order.paymentMethod);
-    if (order.gatewayTransactionId != null) {
-      lines.add('Txn: ${order.gatewayTransactionId}');
-    }
-    lines.add('Operator: ${order.operatorName}');
-    lines.add('======================');
-    lines.add('');
-    lines.add(' Thank You! Visit Again!');
-    lines.add('');
-    lines.add('');
-    return lines;
+    return success;
   }
 
-  String _formatReceiptTime(int timestamp) {
-    if (timestamp == 0) return '';
-    final dt = DateTime.fromMillisecondsSinceEpoch(timestamp);
-    return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+  Future<void> _deductStockForOrder(String itemsText) async {
+    if (itemsText.isEmpty) return;
+    final itemsData = itemsText.split('|');
+    for (final raw in itemsData) {
+      final parts = raw.split('*');
+      if (parts.length < 2) continue;
+      final name = parts[0];
+      final qty = int.tryParse(parts[1]) ?? 0;
+      final itemId = parts.length >= 4 ? int.tryParse(parts[3]) : null;
+      if (qty <= 0) continue;
+
+      final match = _menuItems.cast<MenuItem?>().firstWhere(
+        (i) => itemId != null && i!.id == itemId,
+        orElse: () => _menuItems.cast<MenuItem?>().firstWhere(
+          (i) => i!.name.toLowerCase().trim() == name.toLowerCase().trim(),
+          orElse: () => null,
+        ),
+      );
+      if (match != null) {
+        final newUsed = match.usedStock + qty;
+        final newRemaining = (match.openingStock - newUsed).clamp(0, match.openingStock);
+        await _db.updateMenuItem(match.copyWith(usedStock: newUsed, remainingStock: newRemaining));
+      }
+    }
   }
+
+  List<String> _generateReceiptLines(Order order) =>
+      ReceiptFormatter.generateReceiptLines(order);
+
+  List<String> _generateKotLines(Order order) =>
+      ReceiptFormatter.generateKotLines(order);
+
+
 
   // ====== EOD METHODS ======
   Map<String, dynamic> getEodSummary() {
@@ -633,11 +644,9 @@ class AppProvider extends ChangeNotifier {
   }
 
   // ====== CSV IMPORT FOR BANK RECONCILIATION ======
-  Future<void> importBankStatementCsv(String filePath) async {
+  Future<void> importBankStatementCsv(String content) async {
     try {
-      final file = File(filePath);
-      final content = await file.readAsString();
-      final csv = const CsvToListConverter().convert(content);
+      final csv = const CsvDecoder().convert(content);
 
       final statements = <BankStatementItem>[];
       for (int i = 1; i < csv.length; i++) {
@@ -665,7 +674,8 @@ class AppProvider extends ChangeNotifier {
         _reconciliationLog = 'No valid records found in CSV.';
       }
       notifyListeners();
-    } catch (e) {
+    } catch (e, st) {
+      _log.warning('CSV import failed', e, st);
       _reconciliationLog = 'Failed to import CSV: $e';
       notifyListeners();
     }

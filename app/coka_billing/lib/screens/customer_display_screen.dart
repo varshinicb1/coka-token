@@ -16,8 +16,6 @@ class CustomerDisplayScreen extends StatefulWidget {
 class _CustomerDisplayScreenState extends State<CustomerDisplayScreen> {
   AppProvider get provider => widget.provider;
 
-  int _currentTokenIndex = 0;
-
   @override
   Widget build(BuildContext context) {
     final today = date_utils.DateUtils.getTodayDateString();
@@ -40,8 +38,8 @@ class _CustomerDisplayScreenState extends State<CustomerDisplayScreen> {
                   style: TextStyle(fontSize: 14, letterSpacing: 2, color: Colors.white.withValues(alpha: 0.5), fontWeight: FontWeight.w600)),
               const SizedBox(height: 8),
               Text(today, style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.3))),
-              const Spacer(),
-              Expanded(
+              const SizedBox(height: 24),
+              Flexible(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -49,8 +47,11 @@ class _CustomerDisplayScreenState extends State<CustomerDisplayScreen> {
                     const SizedBox(height: 12),
                     Text('TOKEN', style: TextStyle(fontSize: 24, color: Colors.white.withValues(alpha: 0.5), letterSpacing: 6)),
                     const SizedBox(height: 8),
-                    Text('#${todayOrders.isNotEmpty ? todayOrders.last.tokenNumber : '---'}',
-                        style: const TextStyle(fontSize: 96, fontWeight: FontWeight.w900, color: Colors.white)),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text('#${todayOrders.isNotEmpty ? todayOrders.last.tokenNumber : '---'}',
+                          style: const TextStyle(fontSize: 96, fontWeight: FontWeight.w900, color: Colors.white)),
+                    ),
                     const SizedBox(height: 16),
                     Text('${todayOrders.length} orders today',
                         style: TextStyle(fontSize: 14, color: Colors.white.withValues(alpha: 0.4))),

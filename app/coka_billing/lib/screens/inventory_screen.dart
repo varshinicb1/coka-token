@@ -217,9 +217,13 @@ class InventoryScreen extends StatelessWidget {
                   const SizedBox(width: 12),
                   Icon(Icons.category_outlined, size: 14, color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
                   const SizedBox(width: 2),
-                  Text(
-                    item.category,
-                    style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurface.withValues(alpha: 0.7)),
+                  Flexible(
+                    child: Text(
+                      item.category,
+                      style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurface.withValues(alpha: 0.7)),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                   const Spacer(),
                   Icon(Icons.inventory, size: 14, color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),

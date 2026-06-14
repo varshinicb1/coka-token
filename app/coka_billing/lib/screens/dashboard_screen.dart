@@ -3,9 +3,8 @@ import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
 import '../theme/app_colors.dart';
 import '../widgets/coka_logo_badge.dart';
-import '../widgets/stat_card.dart';
-import '../widgets/thermal_receipt_widget.dart';
 import '../screens/billing_screen.dart';
+import '../screens/bluetooth_pairing_screen.dart';
 import '../screens/transactions_screen.dart';
 import '../screens/reports_screen.dart';
 import '../screens/inventory_screen.dart';
@@ -25,8 +24,6 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   int _selectedIndex = 0;
-  bool _showingReceipt = false;
-
   static const _navItems = <_NavItem>[
     _NavItem(Icons.dashboard, 'Home'),
     _NavItem(Icons.shopping_cart, 'Billing'),
@@ -39,93 +36,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _NavItem(Icons.account_balance, 'Reconciliation'),
     _NavItem(Icons.tv, 'Customer'),
   ];
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _checkReceipt();
-  }
-
-  @override
-  void didUpdateWidget(covariant DashboardScreen oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    _checkReceipt();
-  }
-
-  void _checkReceipt() {
-    final provider = context.read<AppProvider>();
-    if (provider.activeOrderForReceipt != null && !_showingReceipt) {
-      _showingReceipt = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) => _showReceiptDialog(provider));
-    }
-    if (provider.activeOrderForReceipt == null) {
-      _showingReceipt = false;
-    }
-  }
-
-  void _showReceiptDialog(AppProvider provider) {
-    if (!mounted || provider.activeOrderForReceipt == null) return;
-    final order = provider.activeOrderForReceipt!;
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        contentPadding: EdgeInsets.zero,
-        content: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ThermalReceiptWidget(order: order),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: () async {
-                    await provider.printOrderReceipt(order);
-                    if (ctx.mounted) {
-                      ScaffoldMessenger.of(ctx).showSnackBar(
-                        const SnackBar(content: Text('Receipt sent to printer')),
-                      );
-                    }
-                  },
-                  icon: const Icon(Icons.print, size: 18),
-                  label: const Text('Print Receipt'),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () {
-                        provider.clearActiveReceipt();
-                        Navigator.pop(ctx);
-                      },
-                      icon: const Icon(Icons.close, size: 18),
-                      label: const Text('Close'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () async {
-                        await provider.printOrderReceipt(order);
-                        provider.clearActiveReceipt();
-                        if (ctx.mounted) Navigator.pop(ctx);
-                      },
-                      icon: const Icon(Icons.print, size: 18),
-                      label: const Text('Print & Close'),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -176,6 +86,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ],
       ),
       actions: [
+        if (provider.btService.isSupported)
+          Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: IconButton(
+              icon: Icon(
+                provider.bluetoothConnected ? Icons.bluetooth_connected : Icons.bluetooth,
+                color: provider.bluetoothConnected
+                    ? AppColors.successGreen
+                    : theme.colorScheme.onSurface.withValues(alpha: 0.5),
+              ),
+              tooltip: provider.bluetoothConnected ? 'Bluetooth Connected' : 'Pair Bluetooth Printer',
+              onPressed: () async {
+                final result = await Navigator.push<bool>(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const BluetoothPairingScreen(),
+                  ),
+                );
+                if (result == true && context.mounted) {
+                  provider.setBluetoothConnected(true);
+                }
+              },
+            ),
+          ),
         Padding(
           padding: const EdgeInsets.only(right: 4),
           child: Icon(
@@ -367,14 +301,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   const SizedBox(height: 8),
                   ...lowStock.take(5).map((item) => Padding(
                     padding: const EdgeInsets.symmetric(vertical: 2),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(item['name'] as String, style: const TextStyle(fontSize: 13)),
-                        Text('${item['remaining']}/${item['opening']}',
-                            style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.cokaAmber, fontSize: 13)),
-                      ],
-                    ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(item['name'] as String, style: const TextStyle(fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
+                          ),
+                          const SizedBox(width: 8),
+                          Text('${item['remaining']}/${item['opening']}',
+                              style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.cokaAmber, fontSize: 13)),
+                        ],
+                      ),
                   )),
                 ],
               ),

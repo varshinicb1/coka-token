@@ -3,6 +3,7 @@ import '../providers/app_provider.dart';
 import '../theme/app_colors.dart';
 import '../models/menu_item.dart';
 import '../models/cart_item.dart';
+import '../widgets/app_dialogs.dart';
 
 // =============================================================================
 // BILLING SCREEN (Fully Functional)
@@ -289,6 +290,7 @@ class BillingScreen extends StatelessWidget {
                   TextField(
                     controller: provider.tokenController,
                     keyboardType: TextInputType.number,
+                    onChanged: (v) => provider.setTokenInput(v),
                     decoration: InputDecoration(
                       labelText: 'Token #',
                       prefixIcon: const Icon(Icons.confirmation_number, size: 18),
@@ -323,7 +325,18 @@ class BillingScreen extends StatelessWidget {
                   SizedBox(
                     height: 48,
                     child: ElevatedButton.icon(
-                      onPressed: provider.cart.isEmpty ? null : () => provider.checkout(),
+                      onPressed: provider.cart.isEmpty ? null : () async {
+                        await provider.checkout();
+                        if (context.mounted && provider.activeOrderForReceipt != null) {
+                          showDialog(
+                            context: context,
+                            builder: (_) => ReceiptActionsDialog(
+                              order: provider.activeOrderForReceipt!,
+                              provider: provider,
+                            ),
+                          );
+                        }
+                      },
                       icon: const Icon(Icons.receipt_long, size: 20),
                       label: Text(
                         'Checkout \u2022 \u20B9${provider.cartTotal.toStringAsFixed(2)}',
@@ -392,11 +405,13 @@ class BillingScreen extends StatelessWidget {
                     padding: EdgeInsets.zero,
                   ),
                   SizedBox(
-                    width: 60,
+                    width: 72,
                     child: Text(
                       '\u20B9${item.total.toStringAsFixed(0)}',
                       textAlign: TextAlign.right,
                       style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],

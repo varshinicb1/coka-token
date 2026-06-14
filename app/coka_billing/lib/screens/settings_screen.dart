@@ -87,6 +87,40 @@ class SettingsScreen extends StatelessWidget {
                 value: provider.isCloudSynced,
                 onChanged: null,
               ),
+              const Divider(height: 1, indent: 72),
+              ListTile(
+                leading: const Icon(Icons.qr_code, color: AppColors.upiBlue),
+                title: const Text('UPI ID'),
+                subtitle: Text(provider.upiId),
+                trailing: const Icon(Icons.edit),
+                onTap: () async {
+                  final controller = TextEditingController(text: provider.upiId);
+                  final result = await showDialog<String>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('Edit UPI ID'),
+                      content: TextField(
+                        controller: controller,
+                        decoration: const InputDecoration(
+                          hintText: 'e.g. coka@upi',
+                          labelText: 'UPI ID',
+                        ),
+                        autofocus: true,
+                      ),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                        FilledButton(
+                          onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+                          child: const Text('Save'),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (result != null && result.isNotEmpty && context.mounted) {
+                    provider.setUpiId(result);
+                  }
+                },
+              ),
             ],
           ),
           const SizedBox(height: 16),
@@ -137,14 +171,16 @@ class SettingsScreen extends StatelessWidget {
                 subtitle: const Text('Upload CSV for reconciliation'),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () async {
-                  final pickerResult = await FilePicker.platform.pickFiles(
+                  final pickerResult = await FilePicker.pickFiles(
                     type: FileType.custom,
                     allowedExtensions: ['csv'],
+                    withData: true,
                   );
                   if (pickerResult != null && pickerResult.files.isNotEmpty) {
-                    final filePath = pickerResult.files.single.path;
-                    if (filePath != null) {
-                      await provider.importBankStatementCsv(filePath);
+                    final file = pickerResult.files.single;
+                    if (file.bytes != null) {
+                      final content = String.fromCharCodes(file.bytes!);
+                      await provider.importBankStatementCsv(content);
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(

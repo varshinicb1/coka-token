@@ -1,13 +1,21 @@
 class FirebaseConfig {
   // COKA Billing Firebase Configuration
-  // === IMPORTANT ===
-  // The admin SDK key you provided (coka-token-firebase-adminsdk-fbsvc-8500827e68.json)
-  // only gives the project_id. To get the remaining values:
   //
-  // 1. Go to https://console.firebase.google.com/project/coka-token/settings/general
-  // 2. Scroll down to "Your apps" section
-  // 3. For Web app: copy the apiKey, authDomain, projectId, storageBucket, messagingSenderId, appId
-  // 4. For Android: download google-services.json and copy the values
+  // === SECURITY WARNING ===
+  // Before production launch, RESTRICT this API key in Firebase Console:
+  //   1. Go to https://console.cloud.google.com/apis/credentials
+  //   2. Click the API key "AIzaSyBpM3SRRfdHyYnFqTh0H6h91xkvNuRqGnE"
+  //   3. Under "Application restrictions", choose "Android apps" or "HTTP referers"
+  //   4. For Android: add your app's package name and SHA-1 fingerprint
+  //   5. For Web: add your domain
+  //   6. Under "API restrictions", restrict to "Firebase Authentication" and "Cloud Firestore"
+  //
+  // === GETTING THE VALUES ===
+  // The admin SDK key only gives the project_id. To get the remaining values:
+  //   1. Go to https://console.firebase.google.com/project/coka-token/settings/general
+  //   2. Scroll down to "Your apps" section
+  //   3. For Web app: copy the apiKey, authDomain, projectId, storageBucket, messagingSenderId, appId
+  //   4. For Android: download google-services.json and copy the values
   //
   // For now the app runs in offline/local mode. Fill in these values to enable Firebase.
 
@@ -24,7 +32,7 @@ class FirebaseConfig {
   static const String webClientId = 'YOUR_WEB_CLIENT_ID';
 
   // Check if Firebase is configured (not using placeholder values)
-  static bool get isConfigured => !webClientId.contains('YOUR_');
+  static bool get isConfigured => !appId.contains('YOUR_');
 
   // Android client ID for Google Sign-In (from google-services.json)
   static const String androidClientId = '277395706746-9h3vnlf7ano0b0gu593i2ocrs4ipj7gc.apps.googleusercontent.com';

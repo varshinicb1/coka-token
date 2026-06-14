@@ -1,4 +1,7 @@
 import 'package:intl/intl.dart';
+import 'package:logging/logging.dart';
+
+final _log = Logger('DateUtils');
 
 class DateUtils {
   static String getTodayDateString() {
@@ -9,7 +12,8 @@ class DateUtils {
     try {
       final date = DateTime.parse(dateString);
       return DateFormat('dd MMM yyyy').format(date);
-    } catch (_) {
+    } catch (e, st) {
+      _log.fine('Failed to parse date: $dateString', e, st);
       return dateString;
     }
   }

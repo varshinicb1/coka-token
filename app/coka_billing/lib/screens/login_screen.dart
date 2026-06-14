@@ -185,27 +185,30 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                     : AppColors.cokaAmber.withValues(alpha: 0.3),
                               ),
                             ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  provider.isFirebaseConfigured ? Icons.cloud_done : Icons.cloud_off,
-                                  size: 16,
-                                  color: provider.isFirebaseConfigured ? AppColors.successGreen : AppColors.cokaAmber,
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  provider.isFirebaseConfigured ? 'Firebase Connected' : 'Firebase Not Configured',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    provider.isFirebaseConfigured ? Icons.cloud_done : Icons.cloud_off,
+                                    size: 16,
                                     color: provider.isFirebaseConfigured ? AppColors.successGreen : AppColors.cokaAmber,
                                   ),
-                                ),
-                                const SizedBox(width: 8),
-                                Icon(Icons.tap_and_play, size: 14,
-                                    color: theme.colorScheme.onSurface.withValues(alpha: 0.4)),
-                              ],
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    provider.isFirebaseConfigured ? 'Firebase Connected' : 'Firebase Not Configured',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: provider.isFirebaseConfigured ? AppColors.successGreen : AppColors.cokaAmber,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Icon(Icons.tap_and_play, size: 14,
+                                      color: theme.colorScheme.onSurface.withValues(alpha: 0.4)),
+                                ],
+                              ),
                             ),
                           ),
                         ),
