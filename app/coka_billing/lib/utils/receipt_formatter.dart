@@ -6,7 +6,7 @@ class ReceiptFormatter {
     final items = CartSerializer.deserialize(order.itemsText);
     final lines = <String>[];
     lines.add('==============================');
-    lines.add('          COKA (M)');
+    lines.add('          COKA');
     lines.add('   Coimbatore Original');
     lines.add('     Kaalan Adda');
     lines.add('  ${order.dateString}  ${_formatTime(order.timestamp)}');
@@ -25,7 +25,7 @@ class ReceiptFormatter {
         lines.add('${name.padRight(16)} $rateLine');
       }
     }
-    lines.add('--------(M)--------(M)--------');
+    lines.add('------------------------------');
     lines.add('Subtotal          Rs.${order.subTotal.toStringAsFixed(0).padLeft(7)}');
     lines.add('------------------------------');
     lines.add('TOTAL             Rs.${order.totalAmount.toStringAsFixed(0).padLeft(7)}');
@@ -36,10 +36,8 @@ class ReceiptFormatter {
     }
     lines.add('------------------------------');
     lines.add('');
-    lines.add('      (M) Thank You!');
-    lines.add('   (M) VISIT AGAIN (M)');
+    lines.add('         Thank You!');
     lines.add('==============================');
-    lines.add('    (M)      (M)      (M)');
     lines.add('');
     return lines;
   }
@@ -48,7 +46,7 @@ class ReceiptFormatter {
     final items = CartSerializer.deserialize(order.itemsText);
     final lines = <String>[];
     lines.add('==============================');
-    lines.add('      KITCHEN KOT (M)');
+    lines.add('      KITCHEN KOT');
     lines.add('   Coimbatore Original');
     lines.add('     Kaalan Adda');
     lines.add('==============================');
@@ -57,7 +55,7 @@ class ReceiptFormatter {
     for (final item in items) {
       lines.add('${item.name} x${item.quantity}');
     }
-    lines.add('--------(M)--------(M)--------');
+    lines.add('------------------------------');
     lines.add(_formatTime(order.timestamp));
     lines.add('------------------------------');
     lines.add('         *** KOT ***');

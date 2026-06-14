@@ -135,7 +135,6 @@ void main() {
       for (int i = 0; i < 100; i++) {
         final lines = ReceiptFormatter.generateReceiptLines(order);
         expect(lines.length, greaterThan(0));
-        expect(lines.any((l) => l.contains('(M)')), true);
         expect(lines.any((l) => l.contains('Rs.')), true);
       }
     });

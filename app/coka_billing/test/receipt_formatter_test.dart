@@ -35,11 +35,11 @@ Order _createOrder({
 void main() {
   group('ReceiptFormatter', () {
     group('generateReceiptLines', () {
-      test('includes COKA header with mushroom', () {
+      test('includes COKA header', () {
         final order = _createOrder();
         final lines = ReceiptFormatter.generateReceiptLines(order);
         expect(lines[0], '==============================');
-        expect(lines[1], '          COKA (M)');
+        expect(lines[1], '          COKA');
         expect(lines[2], '   Coimbatore Original');
         expect(lines[3], '     Kaalan Adda');
       });
@@ -74,12 +74,6 @@ void main() {
         expect(nameLine, 'ExtraLongBurgerName');
       });
 
-      test('includes mushroom separators', () {
-        final order = _createOrder();
-        final lines = ReceiptFormatter.generateReceiptLines(order);
-        expect(lines, contains(contains('(M)')));
-      });
-
       test('includes subtotal and total', () {
         final order = _createOrder(subTotal: 500.0, totalAmount: 500.0);
         final lines = ReceiptFormatter.generateReceiptLines(order);
@@ -111,31 +105,24 @@ void main() {
         expect(lines.where((l) => l.contains('Txn:')).length, 0);
       });
 
-      test('includes Thank You and mushroom footer', () {
+      test('includes Thank You footer', () {
         final order = _createOrder();
         final lines = ReceiptFormatter.generateReceiptLines(order);
         expect(lines, contains(contains('Thank You')));
-        expect(lines, contains(contains('VISIT AGAIN')));
-      });
-
-      test('ends with mushrooms line', () {
-        final order = _createOrder();
-        final lines = ReceiptFormatter.generateReceiptLines(order);
-        expect(lines[lines.length - 2], contains('(M)'));
       });
 
       test('returns consistent line count', () {
         final order = _createOrder(itemsText: 'A*1*10*1|B*2*20*2');
         final lines = ReceiptFormatter.generateReceiptLines(order);
-        expect(lines.length, 25);
+        expect(lines.length, 23);
       });
     });
 
     group('generateKotLines', () {
-      test('includes KOT header with mushroom', () {
+      test('includes KOT header', () {
         final order = _createOrder();
         final lines = ReceiptFormatter.generateKotLines(order);
-        expect(lines[1], '      KITCHEN KOT (M)');
+        expect(lines[1], '      KITCHEN KOT');
       });
 
       test('includes token number', () {
@@ -160,16 +147,10 @@ void main() {
         expect(itemLine, 'VeryLongItemNameHere x1');
       });
 
-      test('ends with hash border', () {
+      test('ends with border', () {
         final order = _createOrder();
         final lines = ReceiptFormatter.generateKotLines(order);
         expect(lines, contains(contains('==============================')));
-      });
-
-      test('includes mushroom separator in KOT', () {
-        final order = _createOrder();
-        final lines = ReceiptFormatter.generateKotLines(order);
-        expect(lines, contains(contains('(M)')));
       });
     });
   });
