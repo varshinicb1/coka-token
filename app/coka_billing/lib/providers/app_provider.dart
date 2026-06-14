@@ -19,6 +19,7 @@ import '../services/bluetooth_printer_service.dart';
 import '../services/firestore_service.dart';
 import '../config/firebase_config.dart';
 import '../services/firebase_auth_service.dart';
+import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
 
 final _log = Logger('AppProvider');
 
@@ -31,12 +32,14 @@ class AppProvider extends ChangeNotifier {
   final AppDatabase _db = AppDatabase();
   final FirestoreService _cloud = FirestoreService();
   final BluetoothPrinterService _btService = BluetoothPrinterService();
+  final AuthService _authService = AuthService();
 
   // Auth
   User? _currentUser;
   String? _loginError;
   String? _registrationSuccess;
   bool _isFirebaseLoading = false;
+  late final StreamSubscription<firebase_auth.User?> _authSub;
 
   // Init
   bool _isInitialized = false;
@@ -136,7 +139,47 @@ class AppProvider extends ChangeNotifier {
     await refreshData();
     await _resetTokenInputToNextAuto();
     _cloud.listenOrders(_onCloudOrdersChanged);
+
+    // Listen to Firebase Auth state for persistent login
+    _authSub = _authService.authStateChanges.listen((fUser) {
+      if (fUser != null && _currentUser == null) {
+        _autoLoginFromFirebase(fUser.email ?? '');
+      } else if (fUser == null && _currentUser != null) {
+        _localLogout();
+      }
+    });
+
+    // Check if already signed in (persistent session)
+    if (_authService.isSignedIn) {
+      await _autoLoginFromFirebase(_authService.currentUser?.email ?? '');
+    }
+
     _isInitialized = true;
+    notifyListeners();
+  }
+
+  Future<void> _autoLoginFromFirebase(String email) async {
+    // Try to load matching local user
+    final localUser = await _db.getUser(email);
+    if (localUser != null) {
+      _currentUser = localUser;
+      _currentScreen = 'BILLING';
+    } else {
+      // Create local user record for Firebase-authenticated user
+      final newUser = User(username: email, passwordHash: '', role: 'STAFF');
+      await _db.insertUser(newUser);
+      _currentUser = newUser;
+      _currentScreen = 'BILLING';
+      _users = await _db.getUsers();
+    }
+    notifyListeners();
+  }
+
+  void _localLogout() {
+    _currentUser = null;
+    _currentScreen = 'LOGIN';
+    _cart = [];
+    _activeOrderForReceipt = null;
     notifyListeners();
   }
 
@@ -239,22 +282,31 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Try Firebase first if configured
+      // Try Firebase Auth first
       if (FirebaseConfig.isConfigured) {
-        try {
-          final request = AuthRequest(email: email, password: password);
-          final response = await FirebaseAuthService.signInWithPassword(FirebaseConfig.apiKey, request);
-          _currentUser = User(username: response.email, passwordHash: password, role: 'STAFF');
+        final firebaseUser = await _authService.signInWithEmailAndPassword(email, password);
+        if (firebaseUser != null) {
+          // Firebase auth succeeded — load or create local user record
+          final localUser = await _db.getUser(email);
+          if (localUser != null) {
+            _currentUser = localUser;
+          } else {
+            final newUser = User(username: email, passwordHash: _hashPassword(password), role: 'ADMIN');
+            await _db.insertUser(newUser);
+            _currentUser = newUser;
+            _users = await _db.getUsers();
+          }
           _loginError = null;
           _currentScreen = 'BILLING';
           _isFirebaseLoading = false;
           notifyListeners();
           return;
-        } catch (e, st) {
-          _log.fine('Firebase login failed, falling back to local auth', e, st);
         }
+        // Firebase failed — fall through to local
+        _log.fine('Firebase login failed, falling back to local auth');
       }
 
+      // Local fallback
       final localUser = await _db.getUser(email);
       if (localUser != null && localUser.passwordHash == _hashPassword(password)) {
         _currentUser = localUser;
@@ -279,11 +331,12 @@ class AppProvider extends ChangeNotifier {
 
     try {
       if (FirebaseConfig.isConfigured) {
-        try {
-          final request = AuthRequest(email: email, password: password);
-          await FirebaseAuthService.signUpWithPassword(FirebaseConfig.apiKey, request);
-        } catch (e, st) {
-          _log.fine('Firebase registration failed, falling back to local', e, st);
+        final firebaseUser = await _authService.createUserWithEmailAndPassword(email, password);
+        if (firebaseUser == null) {
+          _loginError = 'Registration failed. Try a different email or check your connection.';
+          _isFirebaseLoading = false;
+          notifyListeners();
+          return;
         }
       }
 
@@ -307,7 +360,10 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void logout() {
+  Future<void> logout() async {
+    if (FirebaseConfig.isConfigured) {
+      await _authService.signOut();
+    }
     _currentUser = null;
     _currentScreen = 'LOGIN';
     _cart = [];
@@ -795,4 +851,10 @@ class AppProvider extends ChangeNotifier {
   }
 
   int get todayOrderCount => _orders.where((o) => o.dateString == date_utils.DateUtils.getTodayDateString() && !o.isRefunded).length;
+
+  @override
+  void dispose() {
+    _authSub.cancel();
+    super.dispose();
+  }
 }

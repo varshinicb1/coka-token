@@ -36,7 +36,7 @@ class _SplashScreenState extends State<SplashScreen>
     final provider = context.read<AppProvider>();
     await provider.init();
     if (!mounted) return;
-    if (provider.isInitialized) {
+    if (provider.isInitialized && provider.currentUser == null) {
       provider.navigateTo('LOGIN');
     }
   }

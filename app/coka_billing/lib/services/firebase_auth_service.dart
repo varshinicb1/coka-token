@@ -1,93 +1,54 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:logging/logging.dart';
 
-class AuthRequest {
-  final String email;
-  final String password;
-  final bool returnSecureToken;
+final _log = Logger('AuthService');
 
-  AuthRequest({
-    required this.email,
-    required this.password,
-    this.returnSecureToken = true,
-  });
+class AuthService {
+  final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  Map<String, dynamic> toJson() => {
-    'email': email,
-    'password': password,
-    'returnSecureToken': returnSecureToken,
-  };
-}
+  User? get currentUser => _auth.currentUser;
+  Stream<User?> get authStateChanges => _auth.authStateChanges();
+  bool get isSignedIn => _auth.currentUser != null;
 
-class AuthResponse {
-  final String email;
-  final String localId;
-  final String idToken;
-  final String refreshToken;
-  final String expiresIn;
-
-  AuthResponse({
-    required this.email,
-    required this.localId,
-    required this.idToken,
-    required this.refreshToken,
-    required this.expiresIn,
-  });
-
-  factory AuthResponse.fromJson(Map<String, dynamic> json) => AuthResponse(
-    email: json['email'] as String,
-    localId: json['localId'] as String,
-    idToken: json['idToken'] as String,
-    refreshToken: json['refreshToken'] as String,
-    expiresIn: json['expiresIn'] as String,
-  );
-}
-
-class GoogleAuthRequest {
-  final String postBody;
-  final String requestUri;
-  final bool returnIdpCredential;
-  final bool returnSecureToken;
-
-  GoogleAuthRequest({
-    required this.postBody,
-    this.requestUri = 'http://localhost',
-    this.returnIdpCredential = true,
-    this.returnSecureToken = true,
-  });
-
-  Map<String, dynamic> toJson() => {
-    'postBody': postBody,
-    'requestUri': requestUri,
-    'returnIdpCredential': returnIdpCredential,
-    'returnSecureToken': returnSecureToken,
-  };
-}
-
-class FirebaseAuthService {
-  static const String _baseUrl = 'https://identitytoolkit.googleapis.com/v1/';
-
-  static Future<AuthResponse> signInWithPassword(String apiKey, AuthRequest request) async {
-    final response = await http.post(
-      Uri.parse('${_baseUrl}accounts:signInWithPassword?key=$apiKey'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(request.toJson()),
-    );
-    if (response.statusCode == 200) {
-      return AuthResponse.fromJson(jsonDecode(response.body));
+  Future<User?> signInWithEmailAndPassword(String email, String password) async {
+    try {
+      final cred = await _auth.signInWithEmailAndPassword(email: email, password: password);
+      return cred.user;
+    } on FirebaseAuthException catch (e) {
+      _log.warning('Sign in failed: ${e.code} ${e.message}');
+      return null;
     }
-    throw Exception('Sign in failed: ${response.body}');
   }
 
-  static Future<AuthResponse> signUpWithPassword(String apiKey, AuthRequest request) async {
-    final response = await http.post(
-      Uri.parse('${_baseUrl}accounts:signUp?key=$apiKey'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(request.toJson()),
-    );
-    if (response.statusCode == 200) {
-      return AuthResponse.fromJson(jsonDecode(response.body));
+  Future<User?> createUserWithEmailAndPassword(String email, String password) async {
+    try {
+      final cred = await _auth.createUserWithEmailAndPassword(email: email, password: password);
+      return cred.user;
+    } on FirebaseAuthException catch (e) {
+      _log.warning('Sign up failed: ${e.code} ${e.message}');
+      return null;
     }
-    throw Exception('Sign up failed: ${response.body}');
+  }
+
+  static String? getFirebaseErrorMessage(dynamic exception) {
+    if (exception is FirebaseAuthException) {
+      return switch (exception.code) {
+        'user-not-found' => 'No user found with this email.',
+        'wrong-password' => 'Incorrect password.',
+        'invalid-credential' => 'Invalid email or password.',
+        'email-already-in-use' => 'An account already exists with this email.',
+        'weak-password' => 'Password is too weak (min 6 characters).',
+        'invalid-email' => 'Invalid email address format.',
+        'user-disabled' => 'This account has been disabled.',
+        'too-many-requests' => 'Too many attempts. Try again later.',
+        'network-request-failed' => 'Network error. Check your internet connection.',
+        _ => exception.message ?? 'Authentication failed.',
+      };
+    }
+    return 'Authentication failed. Please try again.';
+  }
+
+  Future<void> signOut() async {
+    await _auth.signOut();
   }
 }
