@@ -66,11 +66,12 @@ class CokaBillingApp extends StatelessWidget {
       value: provider,
       child: Consumer<AppProvider>(
         builder: (context, appProv, _) {
+          final isMario = appProv.themeStyle == 'mario';
           return MaterialApp(
             title: 'COKA Billing',
             debugShowCheckedModeBanner: false,
-            theme: AppTheme.lightTheme,
-            darkTheme: AppTheme.darkTheme,
+            theme: isMario ? AppTheme.marioLightTheme : AppTheme.lightTheme,
+            darkTheme: isMario ? AppTheme.marioDarkTheme : AppTheme.darkTheme,
             themeMode: appProv.isDarkMode ? ThemeMode.dark : ThemeMode.light,
             builder: (context, child) => GestureDetector(
               onTap: () => FocusScope.of(context).unfocus(),

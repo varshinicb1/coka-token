@@ -47,6 +47,7 @@ class AppProvider extends ChangeNotifier {
   // UI
   String _currentScreen = 'LOGIN';
   bool _isDarkMode = false;
+  String _themeStyle = 'coka'; // 'coka' | 'mario'
   bool _bluetoothConnected = false;
   bool _isCloudSynced = false;
 
@@ -106,6 +107,7 @@ class AppProvider extends ChangeNotifier {
   bool get isFirebaseConfigured => FirebaseConfig.isConfigured;
   String get csvExportMessage => _csvExportMessage;
   bool get isEodInProgress => _isEodInProgress;
+  String get themeStyle => _themeStyle;
   String get upiId => _upiId;
   String get upiMerchantName => 'COKA COIMBATORE ORIGINAL KAALAN ADDA';
 
@@ -260,6 +262,11 @@ class AppProvider extends ChangeNotifier {
 
   void setDarkMode(bool value) {
     _isDarkMode = value;
+    notifyListeners();
+  }
+
+  void setThemeStyle(String style) {
+    _themeStyle = style;
     notifyListeners();
   }
 

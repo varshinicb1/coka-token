@@ -41,6 +41,17 @@ class SettingsScreen extends StatelessWidget {
                 onChanged: (val) => provider.setDarkMode(val),
               ),
               const Divider(height: 1, indent: 72),
+              SwitchListTile(
+                title: const Text('Mario Theme'),
+                subtitle: Text(provider.themeStyle == 'mario' ? 'Mario style ON' : 'Default COKA style'),
+                secondary: Icon(
+                  provider.themeStyle == 'mario' ? Icons.sports_esports : Icons.store,
+                  color: provider.themeStyle == 'mario' ? AppColors.marioRed : AppColors.cokaAmber,
+                ),
+                value: provider.themeStyle == 'mario',
+                onChanged: (val) => provider.setThemeStyle(val ? 'mario' : 'coka'),
+              ),
+              const Divider(height: 1, indent: 72),
               ListTile(
                 leading: Icon(
                   Icons.bluetooth,

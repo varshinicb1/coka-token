@@ -15,4 +15,15 @@ class AppColors {
   static const Color darkBg = Color(0xFF120C0C);
   static const Color lightBg = Color(0xFFFDFBF7);
   static const Color lightSurface = Color(0xFFFFFFFF);
+
+  // Mario theme
+  static const Color marioRed = Color(0xFFE52521);
+  static const Color marioGreen = Color(0xFF049B4A);
+  static const Color marioYellow = Color(0xFFFBD000);
+  static const Color marioBlue = Color(0xFF0052CC);
+  static const Color marioBrown = Color(0xFF8B4513);
+  static const Color marioSkin = Color(0xFFFFDBB4);
+  static const Color marioLightBg = Color(0xFFFEFCF3);
+  static const Color marioDarkBg = Color(0xFF1A0A0A);
+  static const Color marioCard = Color(0xFF2A1215);
 }
