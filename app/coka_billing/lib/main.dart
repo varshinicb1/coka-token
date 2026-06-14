@@ -10,6 +10,15 @@ import 'screens/login_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'config/firebase_config.dart';
 
+FirebaseOptions _firebaseOptions() => FirebaseOptions(
+  apiKey: FirebaseConfig.apiKey,
+  appId: FirebaseConfig.appId,
+  messagingSenderId: FirebaseConfig.messagingSenderId,
+  projectId: FirebaseConfig.projectId,
+  authDomain: FirebaseConfig.authDomain,
+  storageBucket: FirebaseConfig.storageBucket,
+);
+
 final _log = Logger('main');
 
 Future<void> main() async {
@@ -35,7 +44,7 @@ Future<void> main() async {
 
   try {
     if (FirebaseConfig.isConfigured) {
-      await Firebase.initializeApp();
+      await Firebase.initializeApp(options: _firebaseOptions());
       _log.info('Firebase initialized');
     }
   } catch (e, st) {
