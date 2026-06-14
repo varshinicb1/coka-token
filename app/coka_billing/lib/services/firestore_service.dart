@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart' hide Order;
+import 'package:firebase_core/firebase_core.dart';
 import 'package:logging/logging.dart';
 import '../config/firebase_config.dart';
 import '../models/order.dart';
@@ -17,10 +18,37 @@ class FirestoreService {
 
   bool get isAvailable => _initialized;
 
-  Future<void> init() async {
-    if (!FirebaseConfig.isConfigured) return;
-    _initialized = true;
-    _log.info('Firestore service ready');
+  Future<bool> init({bool force = false}) async {
+    if (_initialized && !force) return true;
+    if (!FirebaseConfig.isConfigured) return false;
+
+    for (int attempt = 1; attempt <= 3; attempt++) {
+      try {
+        if (attempt > 1 || force) {
+          await Firebase.initializeApp(options: FirebaseConfig.toOptions());
+        }
+        await FirebaseFirestore.instance.collection('orders').limit(1).get().timeout(const Duration(seconds: 10));
+        _initialized = true;
+        _log.info('Firestore connected (attempt $attempt)');
+        return true;
+      } catch (e, st) {
+        _log.warning('Firestore connect attempt $attempt/3 failed: $e');
+        if (attempt < 3) await Future.delayed(Duration(seconds: attempt * 2));
+      }
+    }
+
+    try {
+      Firebase.app();
+      await FirebaseFirestore.instance.collection('orders').limit(1).get().timeout(const Duration(seconds: 10));
+      _initialized = true;
+      _log.info('Firestore connected on retry after re-init');
+      return true;
+    } catch (e) {
+      _log.warning('Firestore final retry failed: $e');
+    }
+
+    _initialized = false;
+    return false;
   }
 
   void dispose() {

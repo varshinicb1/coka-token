@@ -10,15 +10,6 @@ import 'screens/login_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'config/firebase_config.dart';
 
-FirebaseOptions _firebaseOptions() => FirebaseOptions(
-  apiKey: FirebaseConfig.apiKey,
-  appId: FirebaseConfig.appId,
-  messagingSenderId: FirebaseConfig.messagingSenderId,
-  projectId: FirebaseConfig.projectId,
-  authDomain: FirebaseConfig.authDomain,
-  storageBucket: FirebaseConfig.storageBucket,
-);
-
 final _log = Logger('main');
 
 Future<void> main() async {
@@ -42,13 +33,13 @@ Future<void> main() async {
     return true;
   };
 
-  try {
-    if (FirebaseConfig.isConfigured) {
-      await Firebase.initializeApp(options: _firebaseOptions());
-      _log.info('Firebase initialized');
+  if (FirebaseConfig.isConfigured) {
+    try {
+      await Firebase.initializeApp(options: FirebaseConfig.toOptions());
+      _log.info('Firebase initialized on startup');
+    } catch (e, st) {
+      _log.warning('Firebase init failed on startup (will retry later)', e, st);
     }
-  } catch (e, st) {
-    _log.warning('Firebase init failed (offline mode)', e, st);
   }
 
   final provider = AppProvider();

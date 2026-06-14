@@ -39,4 +39,13 @@ class FirebaseConfig {
 
   // iOS client ID for Google Sign-In
   static const String iosClientId = 'YOUR_IOS_CLIENT_ID';
+
+  static FirebaseOptions toOptions() => FirebaseOptions(
+    apiKey: apiKey,
+    appId: appId,
+    messagingSenderId: messagingSenderId,
+    projectId: projectId,
+    authDomain: authDomain,
+    storageBucket: storageBucket,
+  );
 }

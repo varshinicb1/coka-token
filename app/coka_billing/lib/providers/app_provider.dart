@@ -143,8 +143,9 @@ class AppProvider extends ChangeNotifier {
     _cloud.listenOrders(_onCloudOrdersChanged);
 
     // Listen to Firebase Auth state for persistent login
-    _authSub = _authService.authStateChanges.listen((fUser) {
+    _authSub = _authService.authStateChanges.listen((fUser) async {
       if (fUser != null && _currentUser == null) {
+        await _ensureCloudAfterLogin();
         _autoLoginFromFirebase(fUser.email ?? '');
       } else if (fUser == null && _currentUser != null) {
         _localLogout();
@@ -153,11 +154,20 @@ class AppProvider extends ChangeNotifier {
 
     // Check if already signed in (persistent session)
     if (_authService.isSignedIn) {
+      await _ensureCloudAfterLogin();
       await _autoLoginFromFirebase(_authService.currentUser?.email ?? '');
     }
 
     _isInitialized = true;
     notifyListeners();
+  }
+
+  Future<void> _ensureCloudAfterLogin() async {
+    final connected = await _cloud.init(force: true);
+    if (connected) {
+      await _syncAllFromCloud();
+      _cloud.listenOrders(_onCloudOrdersChanged);
+    }
   }
 
   Future<void> _autoLoginFromFirebase(String email) async {
@@ -186,7 +196,11 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> _syncAllFromCloud() async {
-    if (!_cloud.isAvailable) return;
+    if (!_cloud.isAvailable) {
+      _isCloudSynced = false;
+      notifyListeners();
+      return;
+    }
 
     final cloudOrders = await _cloud.loadOrders();
     if (cloudOrders != null && cloudOrders.isNotEmpty) {
@@ -293,6 +307,7 @@ class AppProvider extends ChangeNotifier {
       if (FirebaseConfig.isConfigured) {
         final firebaseUser = await _authService.signInWithEmailAndPassword(email, password);
         if (firebaseUser != null) {
+          await _ensureCloudAfterLogin();
           // Firebase auth succeeded — load or create local user record
           final localUser = await _db.getUser(email);
           if (localUser != null) {
@@ -345,6 +360,7 @@ class AppProvider extends ChangeNotifier {
           notifyListeners();
           return;
         }
+        await _ensureCloudAfterLogin();
       }
 
       final existing = await _db.getUser(email);
