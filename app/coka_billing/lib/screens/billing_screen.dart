@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
 import '../theme/app_colors.dart';
 import '../models/menu_item.dart';
@@ -280,10 +281,8 @@ class BillingScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   _summaryRow('Subtotal', provider.cartSubTotal, theme),
-                  const SizedBox(height: 4),
-                  _summaryRow('GST (5%)', provider.cartTaxAmount, theme),
                   Divider(color: theme.dividerTheme.color, height: 16),
-                  _summaryRow('Total', provider.cartTotal, theme, bold: true, large: true),
+                  _summaryRow('Total', provider.cartSubTotal, theme, bold: true, large: true),
                   const SizedBox(height: 12),
 
                   // Token Input
@@ -476,34 +475,37 @@ class BillingScreen extends StatelessWidget {
 
   void _showCartSheet(BuildContext context) {
     final theme = Theme.of(context);
-    final screen = SizedBox(
-      height: MediaQuery.of(context).size.height * 0.75,
-      child: _buildCartPanel(context, theme),
-    );
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        decoration: BoxDecoration(
-          color: theme.scaffoldBackgroundColor,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              margin: const EdgeInsets.symmetric(vertical: 8),
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(2),
+      builder: (ctx) => Consumer<AppProvider>(
+        builder: (context, provider, _) => Container(
+          decoration: BoxDecoration(
+            color: theme.scaffoldBackgroundColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                margin: const EdgeInsets.symmetric(vertical: 8),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
-            ),
-            Flexible(child: screen),
-          ],
+              Flexible(
+                child: SizedBox(
+                  height: MediaQuery.of(context).size.height * 0.75,
+                  child: _buildCartPanel(context, theme),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

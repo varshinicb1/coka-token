@@ -10,7 +10,7 @@ class CsvExportService {
   static Future<String> exportOrders(List<Order> orders) async {
     if (orders.isEmpty) return 'No orders to export';
 
-    final header = ['Order ID', 'Token', 'Items', 'SubTotal', 'GST Tax', 'Total', 'Payment Method', 'Date', 'Operator', 'Refunded', 'Gateway Txn ID'];
+    final header = ['Order ID', 'Token', 'Items', 'SubTotal', 'Total', 'Payment Method', 'Date', 'Operator', 'Refunded', 'Gateway Txn ID'];
     final rows = <List<String>>[header];
 
     for (final o in orders) {
@@ -19,7 +19,6 @@ class CsvExportService {
         o.tokenNumber,
         o.itemsText.replaceAll('|', '; ').replaceAll('*', ' x '),
         o.subTotal.toStringAsFixed(2),
-        o.taxAmount.toStringAsFixed(2),
         o.totalAmount.toStringAsFixed(2),
         o.paymentMethod,
         o.dateString,

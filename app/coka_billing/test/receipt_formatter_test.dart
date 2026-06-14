@@ -7,8 +7,8 @@ Order _createOrder({
   String token = 'A1',
   String itemsText = 'Item1*2*100*1',
   double subTotal = 200.0,
-  double taxAmount = 10.0,
-  double totalAmount = 210.0,
+  double taxAmount = 0.0,
+  double totalAmount = 200.0,
   String paymentMethod = 'Cash',
   String dateString = '2024-01-15',
   int timestamp = 1705315200000,
@@ -35,19 +35,19 @@ Order _createOrder({
 void main() {
   group('ReceiptFormatter', () {
     group('generateReceiptLines', () {
-      test('includes header and restaurant name', () {
+      test('includes Mario themed header', () {
         final order = _createOrder();
         final lines = ReceiptFormatter.generateReceiptLines(order);
-        expect(lines[0], '======================');
-        expect(lines[1], '       COKA');
-        expect(lines[2], ' Coimbatore Original');
-        expect(lines[3], '   Kaalan Adda');
+        expect(lines[0], '##############################');
+        expect(lines[1], '#    MARIO  x  COKA         #');
+        expect(lines[2], '#  Coimbatore Original      #');
       });
 
-      test('includes token number', () {
+      test('includes token number with stars', () {
         final order = _createOrder(token: 'B3');
         final lines = ReceiptFormatter.generateReceiptLines(order);
-        expect(lines, contains('      TOKEN #B3'));
+        expect(lines, contains(contains('TOKEN #B3')));
+        expect(lines, contains(contains('★')));
       });
 
       test('includes date and time', () {
@@ -75,7 +75,7 @@ void main() {
       });
 
       test('includes subtotal and total', () {
-        final order = _createOrder(subTotal: 500.0, taxAmount: 25.0, totalAmount: 525.0);
+        final order = _createOrder(subTotal: 500.0, totalAmount: 500.0);
         final lines = ReceiptFormatter.generateReceiptLines(order);
         expect(lines, contains(contains('Subtotal')));
         expect(lines, contains(contains('TOTAL')));
@@ -105,31 +105,33 @@ void main() {
         expect(lines.where((l) => l.contains('Txn:')).length, 0);
       });
 
-      test('includes thank you message at the end', () {
+      test('includes Mario themed footer', () {
         final order = _createOrder();
         final lines = ReceiptFormatter.generateReceiptLines(order);
-        final thankYou = lines.indexOf('      Thank You!');
-        expect(thankYou, greaterThan(0));
+        expect(lines, contains(contains('THANK YOU')));
+        expect(lines, contains(contains('1-UP')));
+        expect(lines.lastWhere((l) => l.contains('#')), '##############################');
       });
 
       test('returns consistent line count', () {
         final order = _createOrder(itemsText: 'A*1*10*1|B*2*20*2');
         final lines = ReceiptFormatter.generateReceiptLines(order);
-        expect(lines.length, 23);
+        expect(lines.length, 25);
       });
     });
 
     group('generateKotLines', () {
-      test('includes KOT header', () {
+      test('includes Mario KOT header', () {
         final order = _createOrder();
         final lines = ReceiptFormatter.generateKotLines(order);
-        expect(lines[1], '      KITCHEN KOT');
+        expect(lines[1], '#      MARIO KITCHEN         #');
       });
 
-      test('includes token number', () {
+      test('includes token number with stars', () {
         final order = _createOrder(token: 'C5');
         final lines = ReceiptFormatter.generateKotLines(order);
-        expect(lines, contains('      TOKEN #C5'));
+        expect(lines, contains(contains('TOKEN #C5')));
+        expect(lines, contains(contains('★')));
       });
 
       test('lists each item with qty', () {
@@ -148,10 +150,10 @@ void main() {
         expect(itemLine, 'VeryLongItemNameHere x1');
       });
 
-      test('ends with KOT marker', () {
+      test('ends with hash border', () {
         final order = _createOrder();
         final lines = ReceiptFormatter.generateKotLines(order);
-        expect(lines, contains('       *** KOT ***'));
+        expect(lines, contains(contains('##############################')));
       });
     });
   });

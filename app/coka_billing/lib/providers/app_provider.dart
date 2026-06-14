@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:csv/csv.dart';
 import 'package:crypto/crypto.dart';
@@ -15,6 +16,7 @@ import '../utils/cart_serializer.dart';
 import '../utils/receipt_formatter.dart';
 import '../services/csv_export_service.dart';
 import '../services/bluetooth_printer_service.dart';
+import '../services/firestore_service.dart';
 import '../config/firebase_config.dart';
 import '../services/firebase_auth_service.dart';
 
@@ -27,6 +29,7 @@ String _hashPassword(String password) {
 
 class AppProvider extends ChangeNotifier {
   final AppDatabase _db = AppDatabase();
+  final FirestoreService _cloud = FirestoreService();
   final BluetoothPrinterService _btService = BluetoothPrinterService();
 
   // Auth
@@ -42,7 +45,7 @@ class AppProvider extends ChangeNotifier {
   String _currentScreen = 'LOGIN';
   bool _isDarkMode = false;
   bool _bluetoothConnected = false;
-  final bool _isCloudSynced = true;
+  bool _isCloudSynced = false;
 
   // Data
   List<MenuItem> _menuItems = [];
@@ -122,16 +125,80 @@ class AppProvider extends ChangeNotifier {
   }
 
   double get cartSubTotal => _cart.fold(0.0, (sum, item) => sum + item.total);
-  double get cartTaxAmount => cartSubTotal * 0.05;
-  double get cartTotal => cartSubTotal + cartTaxAmount;
+  double get cartTaxAmount => 0.0;
+  double get cartTotal => cartSubTotal;
 
   // Init
   Future<void> init() async {
     await _db.prepopulateIfNeeded();
+    await _cloud.init();
+    await _syncAllFromCloud();
     await refreshData();
     await _resetTokenInputToNextAuto();
+    _cloud.listenOrders(_onCloudOrdersChanged);
     _isInitialized = true;
     notifyListeners();
+  }
+
+  Future<void> _syncAllFromCloud() async {
+    if (!_cloud.isAvailable) return;
+
+    final cloudOrders = await _cloud.loadOrders();
+    if (cloudOrders != null && cloudOrders.isNotEmpty) {
+      final maxLocal = _orders.isEmpty ? 0 : _orders.map((o) => o.id ?? 0).reduce((a, b) => a > b ? a : b);
+      final newOrders = cloudOrders.where((m) {
+        final id = m['id'] as int? ?? 0;
+        return id > maxLocal || !_orders.any((o) => (o.id ?? 0) == id);
+      }).toList();
+      if (newOrders.isNotEmpty) {
+        for (final m in newOrders) {
+          _orders.add(Order.fromMap(m));
+        }
+        _orders.sort((a, b) => (a.id ?? 0).compareTo(b.id ?? 0));
+        await _db.clearAndInsertOrders(_orders);
+        _log.info('Synced ${newOrders.length} orders from cloud');
+      }
+    }
+
+    final cloudItems = await _cloud.loadMenuItems();
+    if (cloudItems != null && cloudItems.isNotEmpty) {
+      _menuItems = cloudItems.map((m) => MenuItem.fromMap(m)).toList();
+      for (final item in _menuItems) {
+        if (item.id != null) await _db.updateMenuItem(item);
+      }
+      _log.info('Synced ${_menuItems.length} menu items from cloud');
+    }
+
+    final cloudExpenses = await _cloud.loadExpenses();
+    if (cloudExpenses != null && cloudExpenses.isNotEmpty) {
+      _expenses = cloudExpenses.map((m) => Expense.fromMap(m)).toList();
+      _log.info('Synced ${_expenses.length} expenses from cloud');
+    }
+
+    final cloudUsers = await _cloud.loadUsers();
+    if (cloudUsers != null && cloudUsers.isNotEmpty) {
+      _users = cloudUsers.map((m) => User.fromMap(m)).toList();
+      _log.info('Synced ${_users.length} users from cloud');
+    }
+
+    _isCloudSynced = true;
+  }
+
+  void _onCloudOrdersChanged(List<Order> incoming) {
+    bool changed = false;
+    for (final newOrder in incoming) {
+      final existingIdx = _orders.indexWhere((o) => o.id == newOrder.id);
+      if (existingIdx != -1) {
+        _orders[existingIdx] = newOrder;
+      } else {
+        _orders.add(newOrder);
+        changed = true;
+      }
+    }
+    if (changed) {
+      _orders.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      notifyListeners();
+    }
   }
 
   Future<void> refreshData() async {
@@ -226,6 +293,7 @@ class AppProvider extends ChangeNotifier {
       } else {
         final newUser = User(username: email, passwordHash: _hashPassword(password), role: 'ADMIN');
         await _db.insertUser(newUser);
+        unawaited(_cloud.saveUser(newUser.toMap()));
         _currentUser = newUser;
         _registrationSuccess = 'User registered successfully!';
         _currentScreen = 'BILLING';
@@ -331,16 +399,18 @@ class AppProvider extends ChangeNotifier {
       gatewayStatus: gatewayStatus,
     );
 
-    await _db.insertOrder(order);
+    final orderId = await _db.insertOrder(order);
+    final savedOrder = order.copyWith(id: orderId);
     await _deductStockForOrder(order.itemsText);
+    unawaited(_cloud.saveOrder(savedOrder.toMap()));
     await refreshData();
     await _resetTokenInputToNextAuto();
 
-    _activeOrderForReceipt = order;
+    _activeOrderForReceipt = savedOrder;
     _cart = [];
 
     if (autoPrint && _btService.isConnected) {
-      await printOrderReceipt(order);
+      await printOrderReceipt(savedOrder);
     }
 
     notifyListeners();
@@ -365,6 +435,7 @@ class AppProvider extends ChangeNotifier {
   Future<void> refundOrder(Order order) async {
     final updated = order.copyWith(isRefunded: true);
     await _db.updateOrder(updated);
+    unawaited(_cloud.saveOrder(updated.toMap()));
     await refreshData();
     if (_activeOrderForReceipt?.id == order.id) {
       _activeOrderForReceipt = updated;
@@ -379,30 +450,37 @@ class AppProvider extends ChangeNotifier {
       if (existing != null) {
         final stockDiff = openingStock - existing.openingStock;
         final newRemaining = (existing.remainingStock + stockDiff).clamp(0, openingStock);
-        await _db.updateMenuItem(existing.copyWith(
+        final updated = existing.copyWith(
           name: name,
           rate: rate,
           category: category,
           openingStock: openingStock,
           remainingStock: newRemaining,
           description: description,
-        ));
+        );
+        await _db.updateMenuItem(updated);
+        if (updated.id != null) unawaited(_cloud.saveMenuItem(updated.toMap()));
       }
     } else {
-      await _db.insertMenuItem(MenuItem(
+      final item = MenuItem(
         name: name,
         rate: rate,
         category: category,
         openingStock: openingStock,
         remainingStock: openingStock,
         description: description,
-      ));
+      );
+      final newId = await _db.insertMenuItem(item);
+      await refreshData();
+      unawaited(_cloud.saveMenuItem(item.copyWith(id: newId).toMap()));
+      return;
     }
     await refreshData();
   }
 
   Future<void> deleteMenuItem(MenuItem item) async {
     await _db.deleteMenuItem(item);
+    if (item.id != null) unawaited(_cloud.deleteMenuItem(item.id!));
     await refreshData();
   }
 
@@ -413,17 +491,20 @@ class AppProvider extends ChangeNotifier {
 
   // Expenses
   Future<void> addExpense(String description, double amount) async {
-    await _db.insertExpense(Expense(
+    final expense = Expense(
       description: description,
       amount: amount,
       timestamp: DateTime.now().millisecondsSinceEpoch,
       dateString: date_utils.DateUtils.getTodayDateString(),
-    ));
+    );
+    final newId = await _db.insertExpense(expense);
     await refreshData();
+    unawaited(_cloud.saveExpense(expense.copyWith(id: newId).toMap()));
   }
 
   Future<void> deleteExpense(Expense expense) async {
     await _db.deleteExpense(expense);
+    if (expense.id != null) unawaited(_cloud.deleteExpense(expense.id!));
     await refreshData();
   }
 

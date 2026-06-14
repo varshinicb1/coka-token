@@ -13,6 +13,21 @@ class Expense {
     required this.dateString,
   });
 
+  Expense copyWith({
+    int? id,
+    String? description,
+    double? amount,
+    int? timestamp,
+    String? dateString,
+  }) =>
+      Expense(
+        id: id ?? this.id,
+        description: description ?? this.description,
+        amount: amount ?? this.amount,
+        timestamp: timestamp ?? this.timestamp,
+        dateString: dateString ?? this.dateString,
+      );
+
   Map<String, dynamic> toMap() => {
         'id': id,
         'description': description,

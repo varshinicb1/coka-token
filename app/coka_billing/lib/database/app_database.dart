@@ -61,6 +61,13 @@ class AppDatabase {
         MenuItem(name: 'BYOB Kaalan Fusion', rate: 119.0, category: 'Kaalan Snacks', openingStock: 75, remainingStock: 75, description: 'Bring Your Own Bite'),
         MenuItem(name: 'Kovai Masala Puri', rate: 69.0, category: 'Kaalan Snacks', openingStock: 110, remainingStock: 110, description: 'Straight from Coimbatore streets'),
         MenuItem(name: 'Egg Bhel Supreme', rate: 89.0, category: 'Kaalan Snacks', openingStock: 95, remainingStock: 95, description: 'Simple. Crunchy. Satisfying'),
+        MenuItem(name: 'Water Bottle', rate: 20.0, category: 'Beverages', openingStock: 200, remainingStock: 200, description: 'Chilled mineral water'),
+        MenuItem(name: 'Brownie', rate: 49.0, category: 'Desserts', openingStock: 50, remainingStock: 50, description: 'Rich chocolate brownie'),
+        MenuItem(name: 'Cold Coffee', rate: 69.0, category: 'Beverages', openingStock: 60, remainingStock: 60, description: 'Iced cold coffee'),
+        MenuItem(name: 'Fresh Lime Soda', rate: 39.0, category: 'Beverages', openingStock: 100, remainingStock: 100, description: 'Refreshing lime soda'),
+        MenuItem(name: 'Masala Chai', rate: 25.0, category: 'Beverages', openingStock: 150, remainingStock: 150, description: 'Spiced Indian tea'),
+        MenuItem(name: 'French Fries', rate: 59.0, category: 'Snacks', openingStock: 80, remainingStock: 80, description: 'Crispy golden fries'),
+        MenuItem(name: 'Veg Sandwich', rate: 79.0, category: 'Snacks', openingStock: 40, remainingStock: 40, description: 'Grilled veg sandwich'),
       ];
       for (final dish in dishes) {
         final map = dish.toMap();
@@ -114,11 +121,11 @@ class AppDatabase {
     return MenuItem.fromMap(map);
   }
 
-  Future<void> insertMenuItem(MenuItem item) async {
+  Future<int> insertMenuItem(MenuItem item) async {
     final db = await database;
     final map = item.toMap();
     map.remove('id');
-    await menuItemStore.add(db, map);
+    return await menuItemStore.add(db, map);
   }
 
   Future<void> updateMenuItem(MenuItem item) async {
@@ -180,6 +187,16 @@ class AppDatabase {
     await orderStore.delete(db);
   }
 
+  Future<void> clearAndInsertOrders(List<Order> orders) async {
+    final db = await database;
+    await orderStore.delete(db);
+    for (final order in orders) {
+      final map = order.toMap();
+      map.remove('id');
+      await orderStore.add(db, map);
+    }
+  }
+
   Future<MenuItem?> _findMenuItem(List<MenuItem> items, int? itemId, String name) {
     if (itemId != null) {
       final byId = items.cast<MenuItem?>().firstWhere(
@@ -227,11 +244,11 @@ class AppDatabase {
     }).toList();
   }
 
-  Future<void> insertExpense(Expense expense) async {
+  Future<int> insertExpense(Expense expense) async {
     final db = await database;
     final map = expense.toMap();
     map.remove('id');
-    await expenseStore.add(db, map);
+    return await expenseStore.add(db, map);
   }
 
   Future<void> deleteExpense(Expense expense) async {
