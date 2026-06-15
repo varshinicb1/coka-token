@@ -61,6 +61,10 @@ dependencies:
   # Runtime permissions (Android 12+)
   permission_handler: ^12.0.3
 
+  # Windows USB/COM port printing (FFI)
+  ffi: ^2.1.0
+  package_info_plus: ^9.0.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

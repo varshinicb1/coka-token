@@ -76,7 +76,7 @@ class _CustomerDisplayScreenState extends State<CustomerDisplayScreen> {
                         child: ListView.separated(
                           scrollDirection: Axis.horizontal,
                           itemCount: displayOrders.length,
-                          separatorBuilder: (_, __) => const SizedBox(width: 8),
+                          separatorBuilder: (_, _) => const SizedBox(width: 8),
                           itemBuilder: (_, i) => Container(
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                             decoration: BoxDecoration(

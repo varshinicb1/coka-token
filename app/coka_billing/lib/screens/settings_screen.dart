@@ -54,7 +54,7 @@ class SettingsScreen extends StatelessWidget {
               const Divider(height: 1, indent: 72),
               ListTile(
                 leading: Icon(
-                  Icons.bluetooth,
+                  provider.btService.isWindowsUsb ? Icons.usb : Icons.bluetooth,
                   color: provider.btService.isSupported
                       ? (provider.bluetoothConnected
                           ? AppColors.upiBlue
@@ -62,25 +62,39 @@ class SettingsScreen extends StatelessWidget {
                       : theme.colorScheme.onSurface.withValues(alpha: 0.2),
                 ),
                 title: Text(
-                  provider.btService.isSupported ? 'Bluetooth Printer' : 'Bluetooth Printer',
+                  provider.btService.isWindowsUsb ? 'USB / Serial Printer' : 'Bluetooth Printer',
                 ),
                 subtitle: Text(
                   provider.btService.isSupported
-                      ? (provider.bluetoothConnected ? 'Connected' : 'Not paired')
+                      ? (provider.bluetoothConnected
+                          ? 'Connected'
+                          : (provider.btService.isWindowsUsb ? 'Not connected' : 'Not paired'))
                       : 'Not available on this device',
                 ),
                 enabled: provider.btService.isSupported,
                 trailing: const Icon(Icons.chevron_right),
                 onTap: provider.btService.isSupported
                     ? () async {
-                        final result = await Navigator.push<bool>(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const BluetoothPairingScreen(),
-                          ),
-                        );
-                        if (result == true && context.mounted) {
-                          provider.setBluetoothConnected(true);
+                        if (provider.btService.isWindowsUsb) {
+                          final portName = await Navigator.push<String>(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const BluetoothPairingScreen(),
+                            ),
+                          );
+                          if (portName != null && context.mounted) {
+                            provider.connectUsb(portName);
+                          }
+                        } else {
+                          final result = await Navigator.push<bool>(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const BluetoothPairingScreen(),
+                            ),
+                          );
+                          if (result == true && context.mounted) {
+                            provider.setBluetoothConnected(true);
+                          }
                         }
                       }
                     : null,

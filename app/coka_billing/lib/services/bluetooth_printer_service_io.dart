@@ -4,8 +4,15 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:logging/logging.dart';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
+import 'usb_printer_service.dart';
 
 final _log = Logger('BluetoothPrinterService');
+
+class BluetoothDeviceProxy {
+  final String name;
+  final String address;
+  BluetoothDeviceProxy({this.name = '', this.address = ''});
+}
 
 class BluetoothPrinterService {
   static final BluetoothPrinterService _instance =
@@ -19,17 +26,22 @@ class BluetoothPrinterService {
   bool _isConnected = false;
   BluetoothDevice? _connectedDevice;
   final List<BluetoothDevice> _discoveredDevices = [];
+  final UsbPrinterService _usb = UsbPrinterService();
 
-  bool get isSupported => Platform.isAndroid;
+  bool get isSupported => Platform.isAndroid || Platform.isWindows;
+  bool get isWindowsUsb => Platform.isWindows;
 
   BluetoothConnection? get connection => _connection;
-  bool get isConnected => _isConnected;
+  bool get isConnected =>
+      Platform.isAndroid ? _isConnected : _usb.isConnected;
   BluetoothDevice? get connectedDevice => _connectedDevice;
   List<BluetoothDevice> get discoveredDevices =>
       List.unmodifiable(_discoveredDevices);
   List<BluetoothDevice> get pairedDevices => _discoveredDevices;
+  UsbPrinterService get usb => _usb;
 
   Future<bool> startDiscovery() async {
+    if (Platform.isWindows) return false;
     try {
       if (Platform.isAndroid) {
         try {
@@ -70,6 +82,7 @@ class BluetoothPrinterService {
   }
 
   Future<bool> connect(BluetoothDevice device) async {
+    if (Platform.isWindows) return false;
     try {
       final connection =
           await BluetoothConnection.toAddress(device.address);
@@ -93,43 +106,68 @@ class BluetoothPrinterService {
     }
   }
 
+  Future<List<String>> enumerateUsbPorts() async {
+    if (!Platform.isWindows) return [];
+    final devices = await _usb.enumerateDevices();
+    return devices.map((d) => d.portName).toList();
+  }
+
+  Future<String?> findVeerPort() async {
+    if (!Platform.isWindows) return null;
+    return _usb.findVeerPort();
+  }
+
+  Future<bool> connectUsb(String portName) async {
+    if (!Platform.isWindows) return false;
+    return _usb.connect(portName);
+  }
+
   Future<void> disconnect() async {
-    try {
-      await _connection?.close();
-    } catch (e, st) {
-      _log.fine('Disconnect error', e, st);
+    if (Platform.isAndroid) {
+      try {
+        await _connection?.close();
+      } catch (e, st) {
+        _log.fine('Disconnect error', e, st);
+      }
+      _connection = null;
+      _isConnected = false;
+      _connectedDevice = null;
+    } else if (Platform.isWindows) {
+      await _usb.disconnect();
     }
-    _connection = null;
-    _isConnected = false;
-    _connectedDevice = null;
   }
 
   Future<bool> printReceipt(List<String> lines) async {
-    if (_connection == null || !_isConnected) return false;
+    if (Platform.isAndroid) {
+      if (_connection == null || !_isConnected) return false;
 
-    try {
-      for (final line in lines) {
-        final bytes = utf8.encode('$line\r\n');
-        final data = Uint8List.fromList(bytes);
-        _connection!.output.add(data);
+      try {
+        for (final line in lines) {
+          final bytes = utf8.encode('$line\r\n');
+          final data = Uint8List.fromList(bytes);
+          _connection!.output.add(data);
+          await _connection!.output.allSent;
+        }
+
+        await Future.delayed(const Duration(milliseconds: 200));
+
+        final cut = Uint8List.fromList([0x1D, 0x56, 0x00]);
+        _connection!.output.add(cut);
         await _connection!.output.allSent;
+
+        final cashDrawer = Uint8List.fromList([0x1B, 0x70, 0x00, 0x19, 0xFA]);
+        _connection!.output.add(cashDrawer);
+        await _connection!.output.allSent;
+
+        return true;
+      } catch (e, st) {
+        _log.warning('Print failed', e, st);
+        return false;
       }
-
-      await Future.delayed(const Duration(milliseconds: 200));
-
-      final cut = Uint8List.fromList([0x1D, 0x56, 0x00]);
-      _connection!.output.add(cut);
-      await _connection!.output.allSent;
-
-      final cashDrawer = Uint8List.fromList([0x1B, 0x70, 0x00, 0x19, 0xFA]);
-      _connection!.output.add(cashDrawer);
-      await _connection!.output.allSent;
-
-      return true;
-    } catch (e, st) {
-      _log.warning('Print failed', e, st);
-      return false;
+    } else if (Platform.isWindows) {
+      return _usb.printReceipt(lines);
     }
+    return false;
   }
 
   void dispose() {

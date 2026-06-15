@@ -114,7 +114,7 @@ void main() {
       test('returns consistent line count', () {
         final order = _createOrder(itemsText: 'A*1*10*1|B*2*20*2');
         final lines = ReceiptFormatter.generateReceiptLines(order);
-        expect(lines.length, 23);
+        expect(lines.length, 24);
       });
     });
 

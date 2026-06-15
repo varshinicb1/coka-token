@@ -12,6 +12,7 @@ class ReceiptFormatter {
     lines.add('  ${order.dateString}  ${_formatTime(order.timestamp)}');
     lines.add('==============================');
     lines.add('       TOKEN #${order.tokenNumber}');
+    lines.add('  ${order.tokenPhrase}');
     lines.add('==============================');
     lines.add('');
     lines.add('Item              Qty  Amt');
@@ -51,6 +52,7 @@ class ReceiptFormatter {
     lines.add('     Kaalan Adda');
     lines.add('==============================');
     lines.add('      TOKEN #${order.tokenNumber}');
+    lines.add('  ${order.tokenPhrase}');
     lines.add('------------------------------');
     for (final item in items) {
       lines.add('${item.name} x${item.quantity}');

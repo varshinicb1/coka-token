@@ -1,0 +1,149 @@
+name: Flutter Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+      - run: flutter test
+
+  build_web:
+    name: Build Web & Deploy
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+      - run: flutter build web --release
+
+      - name: Deploy to Firebase Hosting
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          channelId: live
+          projectId: coka-token
+
+      - name: Upload web artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coka_billing_web
+          path: build/web
+
+  build_android:
+    name: Build Android APK
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+      - run: flutter build apk --release
+
+      - name: Sign APK
+        uses: r0adkll/sign-android-release@v1
+        with:
+          releaseDirectory: build/app/outputs/flutter-apk
+          signingKeyBase64: ${{ secrets.ANDROID_SIGNING_KEY }}
+          alias: ${{ secrets.ANDROID_KEY_ALIAS }}
+          keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release.apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+
+  build_windows:
+    name: Build Windows EXE
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Cache Firebase C++ SDK
+        id: cache-firebase
+        uses: actions/cache@v4
+        with:
+          path: C:\firebase_cpp_sdk
+          key: firebase-cpp-sdk-windows
+
+      - name: Download Firebase C++ SDK
+        if: steps.cache-firebase.outputs.cache-hit != 'true'
+        run: |
+          Invoke-WebRequest -Uri "https://firebase.google.com/download/cpp" -OutFile "$env:TEMP\firebase_cpp_sdk.zip"
+          Expand-Archive -Path "$env:TEMP\firebase_cpp_sdk.zip" -DestinationPath "C:\firebase_cpp_sdk"
+
+      - run: flutter pub get
+      - run: flutter build windows --release
+        env:
+          FIREBASE_CPP_SDK_DIR: C:\firebase_cpp_sdk\firebase_cpp_sdk_windows
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coka_billing_windows
+          path: build\windows\x64\runner\Release
+
+  create_release:
+    name: Create GitHub Release
+    needs: [build_web, build_android, build_windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: app-release.apk
+          path: artifacts
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: coka_billing_windows
+          path: artifacts/coka_billing_windows
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: coka_billing_web
+          path: artifacts/coka_billing_web
+
+      - name: Zip Windows build
+        run: |
+          cd artifacts/coka_billing_windows
+          zip -r ../coka_billing_windows.zip .
+
+      - name: Zip Web build
+        run: |
+          cd artifacts/coka_billing_web
+          zip -r ../coka_billing_web.zip .
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/app-release.apk
+            artifacts/coka_billing_windows.zip
+            artifacts/coka_billing_web.zip
+          generate_release_notes: true

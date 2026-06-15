@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import '../lib/models/order.dart';
-import '../lib/utils/cart_serializer.dart';
-import '../lib/utils/receipt_formatter.dart';
+import 'package:coka_billing/models/order.dart';
+import 'package:coka_billing/utils/cart_serializer.dart';
+import 'package:coka_billing/utils/receipt_formatter.dart';
 
 void main() {
   group('Order processing stress test', () {

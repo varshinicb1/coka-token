@@ -112,7 +112,7 @@ class _AddMenuItemDialogState extends State<AddMenuItemDialog> {
                 ),
                 const SizedBox(height: 14),
                 DropdownButtonFormField<String>(
-                  value: _categories.contains(_categoryCtrl.text) ? _categoryCtrl.text : null,
+                  initialValue: _categories.contains(_categoryCtrl.text) ? _categoryCtrl.text : null,
                   decoration: const InputDecoration(labelText: 'Category'),
                   items: _categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
                   onChanged: (v) {

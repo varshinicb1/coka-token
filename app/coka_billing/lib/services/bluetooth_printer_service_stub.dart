@@ -10,6 +10,7 @@ class BluetoothPrinterService {
   BluetoothPrinterService._internal();
 
   bool get isSupported => false;
+  bool get isWindowsUsb => false;
   bool get isConnected => false;
   BluetoothDeviceProxy? get connectedDevice => null;
   List<BluetoothDeviceProxy> get discoveredDevices => [];
@@ -17,6 +18,9 @@ class BluetoothPrinterService {
 
   Future<bool> startDiscovery() async => false;
   Future<bool> connect(BluetoothDeviceProxy device) async => false;
+  Future<List<String>> enumerateUsbPorts() async => [];
+  Future<String?> findVeerPort() async => null;
+  Future<bool> connectUsb(String portName) async => false;
   Future<void> disconnect() async {}
   Future<bool> printReceipt(List<String> lines) async => false;
   void dispose() {}

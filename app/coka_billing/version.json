@@ -1,0 +1,16 @@
+{
+  "latestVersion": "1.0.0",
+  "latestBuild": 1,
+  "minVersion": "1.0.0",
+  "releaseNotes": "Initial release with bug fixes, race condition hardening, token phrase system, and auto-setup launcher.",
+  "platforms": {
+    "windows": {
+      "downloadUrl": "https://github.com/varshinicb1/coka-token/releases/latest/download/coka_billing_windows.zip",
+      "version": "1.0.0"
+    },
+    "android": {
+      "downloadUrl": "https://github.com/varshinicb1/coka-token/releases/latest/download/app-release.apk",
+      "version": "1.0.0"
+    }
+  }
+}

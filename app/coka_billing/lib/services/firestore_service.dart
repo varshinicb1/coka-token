@@ -14,6 +14,7 @@ class FirestoreService {
 
   bool _initialized = false;
   bool _listening = false;
+  bool _initInProgress = false;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _orderSubscription;
 
   bool get isAvailable => _initialized;
@@ -22,16 +23,35 @@ class FirestoreService {
     if (_initialized && !force) return true;
     if (!FirebaseConfig.isConfigured) return false;
 
+    if (force) {
+      if (_initInProgress) return false;
+      _initInProgress = true;
+      try {
+        return await _ensureConnected();
+      } finally {
+        _initInProgress = false;
+      }
+    }
+
+    try {
+      await Firebase.initializeApp(options: FirebaseConfig.toOptions());
+      _log.info('Firebase app initialized (awaiting auth for Firestore)');
+      return true;
+    } catch (e, st) {
+      _log.warning('Firebase init failed', e, st);
+      return false;
+    }
+  }
+
+  Future<bool> _ensureConnected() async {
     for (int attempt = 1; attempt <= 3; attempt++) {
       try {
-        if (attempt > 1 || force) {
-          await Firebase.initializeApp(options: FirebaseConfig.toOptions());
-        }
+        await Firebase.initializeApp(options: FirebaseConfig.toOptions());
         await FirebaseFirestore.instance.collection('orders').limit(1).get().timeout(const Duration(seconds: 10));
         _initialized = true;
         _log.info('Firestore connected (attempt $attempt)');
         return true;
-      } catch (e, st) {
+      } catch (e) {
         _log.warning('Firestore connect attempt $attempt/3 failed: $e');
         if (attempt < 3) await Future.delayed(Duration(seconds: attempt * 2));
       }
@@ -91,6 +111,7 @@ class FirestoreService {
   void listenOrders(void Function(List<Order>) onUpdate) {
     if (!_initialized || _listening) return;
     _listening = true;
+    _orderSubscription?.cancel();
     _orderSubscription = FirebaseFirestore.instance
         .collection('orders')
         .orderBy('timestamp', descending: true)

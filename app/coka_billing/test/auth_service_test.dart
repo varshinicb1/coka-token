@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../lib/services/firebase_auth_service.dart';
+import 'package:coka_billing/services/firebase_auth_service.dart';
 
 void main() {
   group('AuthService error messages', () {

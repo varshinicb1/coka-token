@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:csv/csv.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:logging/logging.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../database/app_database.dart';
 import '../models/user.dart';
 import '../models/menu_item.dart';
@@ -11,12 +13,14 @@ import '../models/order.dart';
 import '../models/expense.dart';
 import '../models/cart_item.dart';
 import '../models/bank_statement_item.dart';
+import '../data/token_phrases.dart';
 import '../utils/date_utils.dart' as date_utils;
 import '../utils/cart_serializer.dart';
 import '../utils/receipt_formatter.dart';
 import '../services/csv_export_service.dart';
 import '../services/bluetooth_printer_service.dart';
 import '../services/firestore_service.dart';
+import '../services/update_service.dart';
 import '../config/firebase_config.dart';
 import '../services/firebase_auth_service.dart';
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
@@ -33,16 +37,18 @@ class AppProvider extends ChangeNotifier {
   final FirestoreService _cloud = FirestoreService();
   final BluetoothPrinterService _btService = BluetoothPrinterService();
   final AuthService _authService = AuthService();
+  final UpdateService _updateService = UpdateService();
 
   // Auth
   User? _currentUser;
   String? _loginError;
   String? _registrationSuccess;
   bool _isFirebaseLoading = false;
-  late final StreamSubscription<firebase_auth.User?> _authSub;
+  StreamSubscription<firebase_auth.User?>? _authSub;
 
   // Init
   bool _isInitialized = false;
+  bool _initInProgress = false;
 
   // UI
   String _currentScreen = 'LOGIN';
@@ -50,6 +56,12 @@ class AppProvider extends ChangeNotifier {
   String _themeStyle = 'coka'; // 'coka' | 'mario'
   bool _bluetoothConnected = false;
   bool _isCloudSynced = false;
+
+  // Mutexes for race condition prevention
+  bool _checkoutInProgress = false;
+  bool _syncInProgress = false;
+  bool _comPortRestoreInProgress = false;
+  bool _printInProgress = false;
 
   // Data
   List<MenuItem> _menuItems = [];
@@ -77,6 +89,9 @@ class AppProvider extends ChangeNotifier {
 
   // EOD
   bool _isEodInProgress = false;
+
+  // Update
+  UpdateInfo? _pendingUpdate;
 
   // UPI ID for QR payments
   String _upiId = 'coka@upi';
@@ -107,6 +122,7 @@ class AppProvider extends ChangeNotifier {
   bool get isFirebaseConfigured => FirebaseConfig.isConfigured;
   String get csvExportMessage => _csvExportMessage;
   bool get isEodInProgress => _isEodInProgress;
+  UpdateInfo? get pendingUpdate => _pendingUpdate;
   String get themeStyle => _themeStyle;
   String get upiId => _upiId;
   String get upiMerchantName => 'COKA COIMBATORE ORIGINAL KAALAN ADDA';
@@ -135,56 +151,91 @@ class AppProvider extends ChangeNotifier {
 
   // Init
   Future<void> init() async {
-    await _db.prepopulateIfNeeded();
-    await _cloud.init();
-    await _syncAllFromCloud();
-    await refreshData();
-    await _resetTokenInputToNextAuto();
-    _cloud.listenOrders(_onCloudOrdersChanged);
+    if (_initInProgress) return;
+    _initInProgress = true;
+    try {
+      await _db.prepopulateIfNeeded();
+      await _cloud.init();
 
-    // Listen to Firebase Auth state for persistent login
-    _authSub = _authService.authStateChanges.listen((fUser) async {
-      if (fUser != null && _currentUser == null) {
+      // Check persistent login BEFORE setting up auth listener
+      // to avoid race between immediate auth state and delayed listener
+      final wasAlreadySignedIn = _authService.isSignedIn;
+      final signedInEmail = _authService.currentUser?.email ?? '';
+
+      // Listen to Firebase Auth state for persistent login
+      _authSub?.cancel();
+      _authSub = _authService.authStateChanges.listen((fUser) async {
+        try {
+          if (fUser != null && _currentUser == null) {
+            await _ensureCloudAfterLogin();
+            _autoLoginFromFirebase(fUser.email ?? '');
+          } else if (fUser == null && _currentUser != null) {
+            _localLogout();
+          }
+        } catch (e, st) {
+          _log.warning('Auth state handler error', e, st);
+        }
+      });
+
+      await refreshData();
+      await _resetTokenInputToNextAuto();
+
+      // Handle persistent session if already signed in
+      if (wasAlreadySignedIn && signedInEmail.isNotEmpty && _currentUser == null) {
         await _ensureCloudAfterLogin();
-        _autoLoginFromFirebase(fUser.email ?? '');
-      } else if (fUser == null && _currentUser != null) {
-        _localLogout();
+        _autoLoginFromFirebase(signedInEmail);
       }
-    });
 
-    // Check if already signed in (persistent session)
-    if (_authService.isSignedIn) {
-      await _ensureCloudAfterLogin();
-      await _autoLoginFromFirebase(_authService.currentUser?.email ?? '');
+      // Check for app updates
+      _checkForUpdate();
+
+      // Auto-detect and connect to Seiznik Veer printer (Windows)
+      if (Platform.isWindows) {
+        await _restoreComPort();
+      }
+    } catch (e, st) {
+      _log.severe('Init failed', e, st);
+    } finally {
+      _isInitialized = true;
+      _initInProgress = false;
+      notifyListeners();
     }
-
-    _isInitialized = true;
-    notifyListeners();
   }
 
   Future<void> _ensureCloudAfterLogin() async {
-    final connected = await _cloud.init(force: true);
-    if (connected) {
-      await _syncAllFromCloud();
-      _cloud.listenOrders(_onCloudOrdersChanged);
+    if (_syncInProgress) return;
+    _syncInProgress = true;
+    try {
+      final connected = await _cloud.init(force: true);
+      if (connected) {
+        await _syncAllFromCloud();
+        _cloud.listenOrders(_onCloudOrdersChanged);
+      }
+    } catch (e, st) {
+      _log.warning('Cloud init after login failed', e, st);
+    } finally {
+      _syncInProgress = false;
     }
   }
 
   Future<void> _autoLoginFromFirebase(String email) async {
-    // Try to load matching local user
-    final localUser = await _db.getUser(email);
-    if (localUser != null) {
-      _currentUser = localUser;
-      _currentScreen = 'BILLING';
-    } else {
-      // Create local user record for Firebase-authenticated user
-      final newUser = User(username: email, passwordHash: '', role: 'STAFF');
-      await _db.insertUser(newUser);
-      _currentUser = newUser;
-      _currentScreen = 'BILLING';
-      _users = await _db.getUsers();
+    if (_currentUser != null) return;
+    try {
+      final localUser = await _db.getUser(email);
+      if (localUser != null) {
+        _currentUser = localUser;
+        _currentScreen = 'BILLING';
+      } else {
+        final newUser = User(username: email, passwordHash: '', role: 'STAFF');
+        await _db.insertUser(newUser);
+        _currentUser = newUser;
+        _currentScreen = 'BILLING';
+        _users = await _db.getUsers();
+      }
+      notifyListeners();
+    } catch (e, st) {
+      _log.warning('Auto login failed', e, st);
     }
-    notifyListeners();
   }
 
   void _localLogout() {
@@ -202,61 +253,83 @@ class AppProvider extends ChangeNotifier {
       return;
     }
 
-    final cloudOrders = await _cloud.loadOrders();
-    if (cloudOrders != null && cloudOrders.isNotEmpty) {
-      final maxLocal = _orders.isEmpty ? 0 : _orders.map((o) => o.id ?? 0).reduce((a, b) => a > b ? a : b);
-      final newOrders = cloudOrders.where((m) {
-        final id = m['id'] as int? ?? 0;
-        return id > maxLocal || !_orders.any((o) => (o.id ?? 0) == id);
-      }).toList();
-      if (newOrders.isNotEmpty) {
-        for (final m in newOrders) {
-          _orders.add(Order.fromMap(m));
+    try {
+      final cloudOrders = await _cloud.loadOrders();
+      if (cloudOrders != null && cloudOrders.isNotEmpty) {
+        final maxLocal = _orders.isEmpty ? 0 : _orders.map((o) => o.id ?? 0).reduce((a, b) => a > b ? a : b);
+        final newOrders = cloudOrders.where((m) {
+          final id = m['id'] as int? ?? 0;
+          return id > maxLocal || !_orders.any((o) => (o.id ?? 0) == id);
+        }).toList();
+        if (newOrders.isNotEmpty) {
+          for (final m in newOrders) {
+            _orders.add(Order.fromMap(m));
+          }
+          _orders.sort((a, b) => (a.id ?? 0).compareTo(b.id ?? 0));
+          await _db.clearAndInsertOrders(_orders);
+          _log.info('Synced ${newOrders.length} orders from cloud');
         }
-        _orders.sort((a, b) => (a.id ?? 0).compareTo(b.id ?? 0));
-        await _db.clearAndInsertOrders(_orders);
-        _log.info('Synced ${newOrders.length} orders from cloud');
       }
+    } catch (e, st) {
+      _log.warning('Cloud order sync failed', e, st);
     }
 
-    final cloudItems = await _cloud.loadMenuItems();
-    if (cloudItems != null && cloudItems.isNotEmpty) {
-      _menuItems = cloudItems.map((m) => MenuItem.fromMap(m)).toList();
-      for (final item in _menuItems) {
-        if (item.id != null) await _db.updateMenuItem(item);
+    try {
+      final cloudItems = await _cloud.loadMenuItems();
+      if (cloudItems != null && cloudItems.isNotEmpty) {
+        _menuItems = cloudItems.map((m) => MenuItem.fromMap(m)).toList();
+        for (final item in _menuItems) {
+          if (item.id != null) await _db.updateMenuItem(item);
+        }
+        _log.info('Synced ${_menuItems.length} menu items from cloud');
       }
-      _log.info('Synced ${_menuItems.length} menu items from cloud');
+    } catch (e, st) {
+      _log.warning('Cloud menu sync failed', e, st);
     }
 
-    final cloudExpenses = await _cloud.loadExpenses();
-    if (cloudExpenses != null && cloudExpenses.isNotEmpty) {
-      _expenses = cloudExpenses.map((m) => Expense.fromMap(m)).toList();
-      _log.info('Synced ${_expenses.length} expenses from cloud');
+    try {
+      final cloudExpenses = await _cloud.loadExpenses();
+      if (cloudExpenses != null && cloudExpenses.isNotEmpty) {
+        _expenses = cloudExpenses.map((m) => Expense.fromMap(m)).toList();
+        _log.info('Synced ${_expenses.length} expenses from cloud');
+      }
+    } catch (e, st) {
+      _log.warning('Cloud expense sync failed', e, st);
     }
 
-    final cloudUsers = await _cloud.loadUsers();
-    if (cloudUsers != null && cloudUsers.isNotEmpty) {
-      _users = cloudUsers.map((m) => User.fromMap(m)).toList();
-      _log.info('Synced ${_users.length} users from cloud');
+    try {
+      final cloudUsers = await _cloud.loadUsers();
+      if (cloudUsers != null && cloudUsers.isNotEmpty) {
+        _users = cloudUsers.map((m) => User.fromMap(m)).toList();
+        _log.info('Synced ${_users.length} users from cloud');
+      }
+    } catch (e, st) {
+      _log.warning('Cloud user sync failed', e, st);
     }
 
     _isCloudSynced = true;
   }
 
   void _onCloudOrdersChanged(List<Order> incoming) {
-    bool changed = false;
-    for (final newOrder in incoming) {
-      final existingIdx = _orders.indexWhere((o) => o.id == newOrder.id);
-      if (existingIdx != -1) {
-        _orders[existingIdx] = newOrder;
-      } else {
-        _orders.add(newOrder);
-        changed = true;
+    try {
+      final ordersCopy = List<Order>.from(_orders);
+      bool changed = false;
+      for (final newOrder in incoming) {
+        final existingIdx = ordersCopy.indexWhere((o) => o.id == newOrder.id);
+        if (existingIdx != -1) {
+          ordersCopy[existingIdx] = newOrder;
+        } else {
+          ordersCopy.add(newOrder);
+          changed = true;
+        }
       }
-    }
-    if (changed) {
-      _orders.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-      notifyListeners();
+      if (changed) {
+        ordersCopy.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+        _orders = ordersCopy;
+        notifyListeners();
+      }
+    } catch (e, st) {
+      _log.warning('Cloud order update failed', e, st);
     }
   }
 
@@ -289,6 +362,18 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> _checkForUpdate() async {
+    try {
+      _pendingUpdate = await _updateService.check();
+      if (_pendingUpdate != null) notifyListeners();
+    } catch (_) {}
+  }
+
+  void clearPendingUpdate() {
+    _pendingUpdate = null;
+    notifyListeners();
+  }
+
   // Navigation
   void navigateTo(String screen) {
     _currentScreen = screen;
@@ -307,16 +392,20 @@ class AppProvider extends ChangeNotifier {
       if (FirebaseConfig.isConfigured) {
         final firebaseUser = await _authService.signInWithEmailAndPassword(email, password);
         if (firebaseUser != null) {
-          await _ensureCloudAfterLogin();
-          // Firebase auth succeeded — load or create local user record
-          final localUser = await _db.getUser(email);
-          if (localUser != null) {
-            _currentUser = localUser;
-          } else {
-            final newUser = User(username: email, passwordHash: _hashPassword(password), role: 'ADMIN');
-            await _db.insertUser(newUser);
-            _currentUser = newUser;
-            _users = await _db.getUsers();
+          if (_currentUser == null) {
+            await _ensureCloudAfterLogin();
+            // Firebase auth succeeded — load or create local user record
+            if (_currentUser == null) {
+              final localUser = await _db.getUser(email);
+              if (localUser != null) {
+                _currentUser = localUser;
+              } else {
+                final newUser = User(username: email, passwordHash: _hashPassword(password), role: 'ADMIN');
+                await _db.insertUser(newUser);
+                _currentUser = newUser;
+                _users = await _db.getUsers();
+              }
+            }
           }
           _loginError = null;
           _currentScreen = 'BILLING';
@@ -451,48 +540,62 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> checkout({String? paymentMethodOverride, String? gatewayTxnId, String? gatewayStatus = 'SUCCESS', bool autoPrint = false}) async {
+    if (_checkoutInProgress) return;
     if (_cart.isEmpty) return;
     if (_cart.any((item) => item.quantity <= 0)) return;
 
-    final enteredToken = _tokenInput.trim().isEmpty ? '1' : _tokenInput.trim();
-    final tokenNum = int.tryParse(enteredToken.replaceAll(RegExp(r'[^0-9]'), ''));
-    if (tokenNum == null || tokenNum < 1) return;
-    final finalPayment = paymentMethodOverride ?? _selectedPaymentMethod;
-    final finalTxnId = gatewayTxnId ?? switch (finalPayment) {
-      'UPI' => 'UTR420${DateTime.now().millisecondsSinceEpoch % 1000000000}',
-      'Card' => 'RRN580${DateTime.now().millisecondsSinceEpoch % 1000000000}',
-      _ => 'CASH${DateTime.now().millisecondsSinceEpoch % 1000000}',
-    };
+    _checkoutInProgress = true;
+    try {
+      final enteredToken = _tokenInput.trim().isEmpty ? '1' : _tokenInput.trim();
+      final tokenNum = int.tryParse(enteredToken.replaceAll(RegExp(r'[^0-9]'), ''));
+      if (tokenNum == null || tokenNum < 1) return;
+      final finalPayment = paymentMethodOverride ?? _selectedPaymentMethod;
+      final finalTxnId = gatewayTxnId ?? switch (finalPayment) {
+        'UPI' => 'UTR420${DateTime.now().millisecondsSinceEpoch % 1000000000}',
+        'Card' => 'RRN580${DateTime.now().millisecondsSinceEpoch % 1000000000}',
+        _ => 'CASH${DateTime.now().millisecondsSinceEpoch % 1000000}',
+      };
 
-    final order = Order(
-      tokenNumber: enteredToken,
-      itemsText: CartSerializer.serialize(_cart),
-      subTotal: cartSubTotal,
-      taxAmount: cartTaxAmount,
-      totalAmount: cartTotal,
-      paymentMethod: finalPayment,
-      timestamp: DateTime.now().millisecondsSinceEpoch,
-      dateString: date_utils.DateUtils.getTodayDateString(),
-      operatorName: _currentUser?.username ?? 'Staff',
-      gatewayTransactionId: finalTxnId,
-      gatewayStatus: gatewayStatus,
-    );
+      final tokenSlot = ((tokenNum - 1) % 120) + 1;
+      final tokenPhrase = TokenPhrases.list[tokenSlot - 1];
 
-    final orderId = await _db.insertOrder(order);
-    final savedOrder = order.copyWith(id: orderId);
-    await _deductStockForOrder(order.itemsText);
-    unawaited(_cloud.saveOrder(savedOrder.toMap()));
-    await refreshData();
-    await _resetTokenInputToNextAuto();
+      final cartSnapshot = List<CartItem>.from(_cart);
+      final order = Order(
+        tokenNumber: enteredToken,
+        itemsText: CartSerializer.serialize(cartSnapshot),
+        subTotal: cartSnapshot.fold(0.0, (sum, item) => sum + item.total),
+        taxAmount: 0.0,
+        totalAmount: cartSnapshot.fold(0.0, (sum, item) => sum + item.total),
+        paymentMethod: finalPayment,
+        timestamp: DateTime.now().millisecondsSinceEpoch,
+        dateString: date_utils.DateUtils.getTodayDateString(),
+        operatorName: _currentUser?.username ?? 'Staff',
+        gatewayTransactionId: finalTxnId,
+        gatewayStatus: gatewayStatus,
+        tokenSlot: tokenSlot,
+        tokenPhrase: tokenPhrase,
+      );
 
-    _activeOrderForReceipt = savedOrder;
-    _cart = [];
+      final orderId = await _db.insertOrder(order);
+      final savedOrder = order.copyWith(id: orderId);
+      await _deductStockForOrder(order.itemsText);
+      _cloud.saveOrder(savedOrder.toMap());
+      await refreshData();
+      await _resetTokenInputToNextAuto();
 
-    if (autoPrint && _btService.isConnected) {
-      await printOrderReceipt(savedOrder);
+      _activeOrderForReceipt = savedOrder;
+      _cart = [];
+
+      if (autoPrint && _btService.isConnected) {
+        await printOrderReceipt(savedOrder);
+      }
+
+      notifyListeners();
+    } catch (e, st) {
+      _log.warning('Checkout failed', e, st);
+    } finally {
+      _checkoutInProgress = false;
     }
-
-    notifyListeners();
   }
 
   void clearActiveReceipt() {
@@ -684,40 +787,117 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ====== BLUETOOTH METHODS ======
+  // ====== BLUETOOTH / USB METHODS ======
   Future<bool> connectBluetooth() async {
     return await _btService.startDiscovery();
+  }
+
+  Future<void> connectUsb(String portName) async {
+    final ok = await _btService.connectUsb(portName);
+    if (ok) {
+      _bluetoothConnected = true;
+      await _saveComPort(portName);
+      notifyListeners();
+    }
   }
 
   void disconnectBluetooth() {
     _btService.disconnect();
     _bluetoothConnected = false;
+    _clearComPort();
     notifyListeners();
   }
 
-  Future<bool> printOrderReceipt(Order order) async {
-    final lines = _generateReceiptLines(order);
-    final success = await _btService.printReceipt(lines);
-    if (success) {
-      _bluetoothConnected = true;
-      notifyListeners();
+  Future<void> _restoreComPort() async {
+    if (_comPortRestoreInProgress) return;
+    _comPortRestoreInProgress = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedPort = prefs.getString('com_port');
+
+      if (savedPort != null && savedPort.isNotEmpty) {
+        final ok = await _btService.connectUsb(savedPort);
+        if (ok) {
+          _log.info('Reconnected to saved COM port $savedPort');
+          _bluetoothConnected = true;
+          notifyListeners();
+          return;
+        }
+      }
+
+      final port = await _btService.findVeerPort();
+      if (port != null) {
+        final ok = await _btService.connectUsb(port);
+        if (ok) {
+          _log.info('Auto-connected to printer on $port');
+          _bluetoothConnected = true;
+          await _saveComPort(port);
+          notifyListeners();
+        }
+      }
+    } catch (_) {
+      _log.fine('COM port restore failed');
+    } finally {
+      _comPortRestoreInProgress = false;
     }
-    return success;
+  }
+
+  Future<void> _saveComPort(String port) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('com_port', port);
+    } catch (_) {}
+  }
+
+  Future<void> _clearComPort() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('com_port');
+    } catch (_) {}
+  }
+
+  Future<bool> printOrderReceipt(Order order) async {
+    if (_printInProgress) return false;
+    _printInProgress = true;
+    try {
+      final lines = _generateReceiptLines(order);
+      final success = await _btService.printReceipt(lines);
+      if (success) {
+        _bluetoothConnected = true;
+        notifyListeners();
+      }
+      return success;
+    } catch (e) {
+      _log.warning('Print receipt failed', e);
+      return false;
+    } finally {
+      _printInProgress = false;
+    }
   }
 
   Future<bool> printKot(Order order) async {
-    final lines = _generateKotLines(order);
-    final success = await _btService.printReceipt(lines);
-    if (success) {
-      _bluetoothConnected = true;
-      notifyListeners();
+    if (_printInProgress) return false;
+    _printInProgress = true;
+    try {
+      final lines = _generateKotLines(order);
+      final success = await _btService.printReceipt(lines);
+      if (success) {
+        _bluetoothConnected = true;
+        notifyListeners();
+      }
+      return success;
+    } catch (e) {
+      _log.warning('Print KOT failed', e);
+      return false;
+    } finally {
+      _printInProgress = false;
     }
-    return success;
   }
 
   Future<void> _deductStockForOrder(String itemsText) async {
     if (itemsText.isEmpty) return;
     final itemsData = itemsText.split('|');
+    final menuSnapshot = List<MenuItem>.from(_menuItems);
     for (final raw in itemsData) {
       final parts = raw.split('*');
       if (parts.length < 2) continue;
@@ -726,9 +906,9 @@ class AppProvider extends ChangeNotifier {
       final itemId = parts.length >= 4 ? int.tryParse(parts[3]) : null;
       if (qty <= 0) continue;
 
-      final match = _menuItems.cast<MenuItem?>().firstWhere(
+      final match = menuSnapshot.cast<MenuItem?>().firstWhere(
         (i) => itemId != null && i!.id == itemId,
-        orElse: () => _menuItems.cast<MenuItem?>().firstWhere(
+        orElse: () => menuSnapshot.cast<MenuItem?>().firstWhere(
           (i) => i!.name.toLowerCase().trim() == name.toLowerCase().trim(),
           orElse: () => null,
         ),
@@ -877,7 +1057,10 @@ class AppProvider extends ChangeNotifier {
 
   @override
   void dispose() {
-    _authSub.cancel();
+    _authSub?.cancel();
+    _authSub = null;
+    tokenController.dispose();
+    _cloud.dispose();
     super.dispose();
   }
 }

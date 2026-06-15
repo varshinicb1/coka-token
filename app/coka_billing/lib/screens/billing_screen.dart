@@ -18,6 +18,8 @@ class BillingScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
+    _checkPendingUpdate(context);
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final showCartInline = constraints.maxWidth > 600;
@@ -509,5 +511,63 @@ class BillingScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  void _checkPendingUpdate(BuildContext context) {
+    final update = provider.pendingUpdate;
+    if (update == null) return;
+    provider.clearPendingUpdate();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!context.mounted) return;
+      showDialog(
+        context: context,
+        barrierDismissible: true,
+        builder: (ctx) => AlertDialog(
+          title: Row(
+            children: [
+              const Icon(Icons.system_update, color: Colors.blue),
+              const SizedBox(width: 8),
+              Expanded(child: Text('Update Available v${update.latestVersion}')),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (update.releaseNotes.isNotEmpty) ...[
+                  Text(update.releaseNotes, style: const TextStyle(fontSize: 13)),
+                  const SizedBox(height: 12),
+                ],
+                const Text('Download:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                const SizedBox(height: 4),
+                if (update.android != null)
+                  Text('Android: ${update.android!.downloadUrl}', style: const TextStyle(fontSize: 11, color: Colors.blue)),
+                if (update.windows != null)
+                  Text('Windows: ${update.windows!.downloadUrl}', style: const TextStyle(fontSize: 11, color: Colors.blue)),
+                const SizedBox(height: 8),
+                const Text('Web version auto-updates on refresh.', style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic)),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Later'),
+            ),
+            FilledButton.icon(
+              icon: const Icon(Icons.open_in_new, size: 16),
+              label: const Text('Download'),
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Visit GitHub Releases to download')),
+                );
+              },
+            ),
+          ],
+        ),
+      );
+    });
   }
 }

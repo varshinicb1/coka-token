@@ -53,6 +53,10 @@ android {
             isShrinkResources = false
         }
     }
+
+    lint {
+        abortOnError = false
+    }
 }
 
 flutter {

@@ -15,6 +15,8 @@ class Order {
   final bool reconciled;
   final int reconciledAt;
   final String? bankStatementMatchId;
+  final int tokenSlot;
+  final String tokenPhrase;
 
   Order({
     this.id,
@@ -33,6 +35,8 @@ class Order {
     this.reconciled = false,
     this.reconciledAt = 0,
     this.bankStatementMatchId,
+    this.tokenSlot = 1,
+    this.tokenPhrase = '',
   });
 
   Order copyWith({
@@ -52,6 +56,8 @@ class Order {
     bool? reconciled,
     int? reconciledAt,
     String? bankStatementMatchId,
+    int? tokenSlot,
+    String? tokenPhrase,
   }) =>
       Order(
         id: id ?? this.id,
@@ -71,6 +77,8 @@ class Order {
         reconciledAt: reconciledAt ?? this.reconciledAt,
         bankStatementMatchId:
             bankStatementMatchId ?? this.bankStatementMatchId,
+        tokenSlot: tokenSlot ?? this.tokenSlot,
+        tokenPhrase: tokenPhrase ?? this.tokenPhrase,
       );
 
   Map<String, dynamic> toMap() => {
@@ -90,6 +98,8 @@ class Order {
         'reconciled': reconciled ? 1 : 0,
         'reconciledAt': reconciledAt,
         'bankStatementMatchId': bankStatementMatchId,
+        'tokenSlot': tokenSlot,
+        'tokenPhrase': tokenPhrase,
       };
 
   factory Order.fromMap(Map<String, dynamic> map) => Order(
@@ -109,5 +119,7 @@ class Order {
         reconciled: map['reconciled'] == 1,
         reconciledAt: map['reconciledAt'] as int? ?? 0,
         bankStatementMatchId: map['bankStatementMatchId'] as String?,
+        tokenSlot: map['tokenSlot'] as int? ?? 1,
+        tokenPhrase: map['tokenPhrase'] as String? ?? '',
       );
 }
