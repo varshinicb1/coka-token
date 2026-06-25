@@ -992,11 +992,14 @@ class AppProvider extends ChangeNotifier {
       if (success) {
         _bluetoothConnected = true;
         notifyListeners();
+        return true;
       }
-      return success;
+      // Printer failed/not connected → auto-generate PDF fallback
+      _log.info('Printer unavailable, generating PDF receipt for order ${order.id}');
+      return await sharePdfReceipt(order);
     } catch (e) {
-      _log.warning('Print receipt failed', e);
-      return false;
+      _log.warning('Print receipt failed, falling back to PDF', e);
+      return await sharePdfReceipt(order);
     } finally {
       _printInProgress = false;
     }
