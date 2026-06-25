@@ -50,27 +50,119 @@ class AppDatabase {
 
     final itemCount = await menuItemStore.count(db);
     if (itemCount == 0) {
-      final dishes = [
-        MenuItem(name: 'COKA Signature Kaalan', rate: 79.0, category: 'Kaalan Dishes', openingStock: 120, remainingStock: 120, description: 'OG street food superstar'),
-        MenuItem(name: 'Kaalan Puri Pockets', rate: 89.0, category: 'Kaalan Snacks', openingStock: 100, remainingStock: 100, description: 'Crispy outside, spicy inside'),
-        MenuItem(name: 'Kaalan Smash', rate: 89.0, category: 'Kaalan Snacks', openingStock: 80, remainingStock: 80, description: 'Crunch meets comfort'),
-        MenuItem(name: 'Cheesy Kaalan Mix', rate: 109.0, category: 'Kaalan Dishes', openingStock: 80, remainingStock: 80, description: 'The crowd favourite'),
-        MenuItem(name: 'Egg Kaalan Loaded', rate: 109.0, category: 'Kaalan Dishes', openingStock: 90, remainingStock: 90, description: 'Twice the protein'),
-        MenuItem(name: 'Kaalan Bhel Blast', rate: 89.0, category: 'Kaalan Snacks', openingStock: 120, remainingStock: 120, description: 'Light, crunchy, addictive'),
-        MenuItem(name: 'Egg-cellent Kaalan Bhel', rate: 109.0, category: 'Kaalan Snacks', openingStock: 85, remainingStock: 85, description: 'Protein meets spice'),
-        MenuItem(name: 'BYOB Kaalan Fusion', rate: 119.0, category: 'Kaalan Snacks', openingStock: 75, remainingStock: 75, description: 'Bring Your Own Bite'),
-        MenuItem(name: 'Kovai Masala Puri', rate: 69.0, category: 'Kaalan Snacks', openingStock: 110, remainingStock: 110, description: 'Straight from Coimbatore streets'),
-        MenuItem(name: 'Egg Bhel Supreme', rate: 89.0, category: 'Kaalan Snacks', openingStock: 95, remainingStock: 95, description: 'Simple. Crunchy. Satisfying'),
-        MenuItem(name: 'Water Bottle', rate: 20.0, category: 'Beverages', openingStock: 200, remainingStock: 200, description: 'Chilled mineral water'),
-        MenuItem(name: 'Brownie', rate: 49.0, category: 'Desserts', openingStock: 50, remainingStock: 50, description: 'Rich chocolate brownie'),
-        MenuItem(name: 'Cold Coffee', rate: 69.0, category: 'Beverages', openingStock: 60, remainingStock: 60, description: 'Iced cold coffee'),
-        MenuItem(name: 'Fresh Lime Soda', rate: 39.0, category: 'Beverages', openingStock: 100, remainingStock: 100, description: 'Refreshing lime soda'),
-        MenuItem(name: 'Masala Chai', rate: 25.0, category: 'Beverages', openingStock: 150, remainingStock: 150, description: 'Spiced Indian tea'),
-        MenuItem(name: 'French Fries', rate: 59.0, category: 'Snacks', openingStock: 80, remainingStock: 80, description: 'Crispy golden fries'),
-        MenuItem(name: 'Veg Sandwich', rate: 79.0, category: 'Snacks', openingStock: 40, remainingStock: 40, description: 'Grilled veg sandwich'),
-      ];
-      for (final dish in dishes) {
-        final map = dish.toMap();
+      await _seedMenuItems(db);
+    }
+  }
+
+  /// The exact 10 final menu items with full descriptions.
+  static List<MenuItem> get finalMenuItems => [
+    MenuItem(
+      name: 'COKA Signature Kaalan',
+      rate: 79.0,
+      category: 'Kaalan Dishes',
+      openingStock: 120,
+      remainingStock: 120,
+      description: "OG street food superstar. Saut\u00E9ed mushrooms tossed in COKA's secret spice blend and signature sauces for that authentic Kovai style kick.",
+    ),
+    MenuItem(
+      name: 'Kaalan Puri Pockets',
+      rate: 89.0,
+      category: 'Kaalan Snacks',
+      openingStock: 100,
+      remainingStock: 100,
+      description: 'Crispy outside, spicy inside. Golden puris generously stuffed with our signature mushroom saut\u00E9 for the perfect bite.',
+    ),
+    MenuItem(
+      name: 'Kaalan Smash',
+      rate: 89.0,
+      category: 'Kaalan Snacks',
+      openingStock: 80,
+      remainingStock: 80,
+      description: 'Crunch meets comfort. Crushed puris layered with spicy mushroom saut\u00E9, creating the ultimate street-food mashup.',
+    ),
+    MenuItem(
+      name: 'Cheesy Kaalan Mix',
+      rate: 109.0,
+      category: 'Kaalan Dishes',
+      openingStock: 80,
+      remainingStock: 80,
+      description: "The crowd favourite. Our classic Kaalan Mix loaded with melted cheese for an extra indulgent twist.",
+    ),
+    MenuItem(
+      name: 'Egg Kaalan Loaded',
+      rate: 109.0,
+      category: 'Kaalan Dishes',
+      openingStock: 90,
+      remainingStock: 90,
+      description: "Twice the protein. Double the flavour. Our signature Kovai style mushroom saut\u00E9 topped with fluffy egg bhurji and finished with COKA's desi spice blend.",
+    ),
+    MenuItem(
+      name: 'Kaalan Bhel Blast',
+      rate: 89.0,
+      category: 'Kaalan Snacks',
+      openingStock: 120,
+      remainingStock: 120,
+      description: 'Light, crunchy, addictive. Puffed rice tossed with bold masalas, fresh toppings and our signature mushroom saut\u00E9.',
+    ),
+    MenuItem(
+      name: 'Egg-cellent Kaalan Bhel',
+      rate: 109.0,
+      category: 'Kaalan Snacks',
+      openingStock: 85,
+      remainingStock: 85,
+      description: 'Protein meets spice. Our Kaalan Bhel crowned with perfectly cooked egg for a richer, heartier crunch.',
+    ),
+    MenuItem(
+      name: 'BYOB Kaalan Fusion',
+      rate: 119.0,
+      category: 'Kaalan Snacks',
+      openingStock: 75,
+      remainingStock: 75,
+      description: "Bring Your Own Bite. Choose your favourite chips flavour and we'll load it up with our signature mushroom saut\u00E9 and toppings.",
+    ),
+    MenuItem(
+      name: 'Kovai Masala Puri',
+      rate: 69.0,
+      category: 'Kaalan Snacks',
+      openingStock: 110,
+      remainingStock: 110,
+      description: 'Straight from Coimbatore streets. Crispy puris drenched in flavour packed masala, just the way Kovai loves it.',
+    ),
+    MenuItem(
+      name: 'Egg Bhel Supreme',
+      rate: 89.0,
+      category: 'Kaalan Snacks',
+      openingStock: 95,
+      remainingStock: 95,
+      description: 'Simple. Crunchy. Satisfying. Puffed rice masala mix topped with egg for a street-food classic with extra bite.',
+    ),
+  ];
+
+  Future<void> _seedMenuItems(Database db) async {
+    for (final dish in finalMenuItems) {
+      final map = dish.toMap();
+      map.remove('id');
+      await menuItemStore.add(db, map);
+    }
+  }
+
+  Future<void> ensureFinalMenuItems() async {
+    final db = await database;
+    final existing = await menuItemStore.find(db);
+    final existingByName = <String, int>{};
+    for (final record in existing) {
+      final name = record.value['name'] as String;
+      existingByName[name] = record.key;
+    }
+
+    for (final newItem in finalMenuItems) {
+      final existingKey = existingByName[newItem.name];
+      if (existingKey != null) {
+        final map = newItem.toMap();
+        map.remove('id');
+        await menuItemStore.record(existingKey).put(db, map);
+      } else {
+        final map = newItem.toMap();
         map.remove('id');
         await menuItemStore.add(db, map);
       }

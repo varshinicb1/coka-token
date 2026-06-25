@@ -159,6 +159,7 @@ class AppProvider extends ChangeNotifier {
     _initInProgress = true;
     try {
       await _db.prepopulateIfNeeded();
+      await _ensureFinalMenuItems();
       await _cloud.init();
 
       // Check persistent login BEFORE setting up auth listener
@@ -204,6 +205,18 @@ class AppProvider extends ChangeNotifier {
       _initInProgress = false;
       notifyListeners();
     }
+  }
+
+  Future<void> _ensureFinalMenuItems() async {
+    final prefs = await SharedPreferences.getInstance();
+    const menuVersion = 2;
+    final currentVersion = prefs.getInt('menu_version') ?? 0;
+    if (currentVersion >= menuVersion) return;
+
+    await _db.ensureFinalMenuItems();
+    await _syncMenuStockToCloud();
+    await prefs.setInt('menu_version', menuVersion);
+    _log.info('Migrated menu to version $menuVersion');
   }
 
   Future<void> _ensureCloudAfterLogin() async {
