@@ -112,10 +112,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         Padding(
           padding: const EdgeInsets.only(right: 4),
-          child: Icon(
-            provider.isCloudSynced ? Icons.cloud_done : Icons.cloud_off,
-            color: provider.isCloudSynced ? AppColors.successGreen : AppColors.cokaAmber,
-            size: 20,
+          child: IconButton(
+            icon: Icon(
+              provider.isCloudSynced ? Icons.cloud_done : Icons.cloud_off,
+              color: provider.isCloudSynced ? AppColors.successGreen : AppColors.cokaAmber,
+              size: 20,
+            ),
+            tooltip: provider.isCloudSynced ? 'Synced - Tap to refresh' : 'Not synced - Tap to sync',
+            onPressed: () => _syncAllData(provider, context),
           ),
         ),
         PopupMenuButton<String>(
@@ -155,6 +159,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
         const SizedBox(width: 8),
       ],
     );
+  }
+
+  Future<void> _syncAllData(AppProvider provider, BuildContext context) async {
+    final scaffold = ScaffoldMessenger.of(context);
+    scaffold.showSnackBar(const SnackBar(content: Text('Syncing with cloud...')));
+    try {
+      await provider.syncWithCloud();
+      if (context.mounted) {
+        scaffold.showSnackBar(SnackBar(
+          content: Text(provider.isCloudSynced ? 'Sync complete!' : 'Sync failed - check connection'),
+          backgroundColor: provider.isCloudSynced ? AppColors.successGreen : AppColors.errorRed,
+        ));
+      }
+    } catch (e) {
+      if (context.mounted) {
+        scaffold.showSnackBar(SnackBar(
+          content: Text('Sync error: $e'),
+          backgroundColor: AppColors.errorRed,
+        ));
+      }
+    }
   }
 
   Widget _buildWideLayout(AppProvider provider, ThemeData theme) {

@@ -360,6 +360,26 @@ class AppProvider extends ChangeNotifier {
     _isCloudSynced = true;
   }
 
+  /// Public method to manually trigger cloud sync
+  Future<void> syncWithCloud() async {
+    if (_syncInProgress) return;
+    _syncInProgress = true;
+    try {
+      final connected = await _cloud.init(force: true);
+      if (connected) {
+        await _syncAllFromCloud();
+        _log.info('Manual cloud sync completed');
+      } else {
+        _log.warning('Manual cloud sync failed: not connected');
+      }
+    } catch (e, st) {
+      _log.warning('Manual cloud sync failed', e, st);
+    } finally {
+      _syncInProgress = false;
+      notifyListeners();
+    }
+  }
+
   void _onCloudOrdersChanged(List<Order> incoming) {
     try {
       final ordersCopy = List<Order>.from(_orders);
