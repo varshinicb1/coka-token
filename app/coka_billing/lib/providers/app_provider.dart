@@ -21,6 +21,7 @@ import '../services/csv_export_service.dart';
 import '../services/bluetooth_printer_service.dart';
 import '../services/firestore_service.dart';
 import '../services/update_service.dart';
+import '../services/pdf_receipt_service.dart';
 import '../config/firebase_config.dart';
 import '../services/firebase_auth_service.dart';
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
@@ -623,6 +624,18 @@ class AppProvider extends ChangeNotifier {
       _activeOrderForReceipt = updated;
     }
     notifyListeners();
+  }
+
+  Future<void> deleteOrder(Order order) async {
+    if (order.id == null) return;
+    await _db.deleteOrder(order.id!);
+    unawaited(_cloud.deleteOrder(order.id!));
+    await refreshData();
+    notifyListeners();
+  }
+
+  Future<bool> sharePdfReceipt(Order order) async {
+    return await PdfReceiptService.sharePdf(order);
   }
 
   // Menu Management

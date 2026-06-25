@@ -532,46 +532,121 @@ class ReceiptActionsDialog extends StatelessWidget {
               ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 24),
-            FilledButton.icon(
-              onPressed: () async {
-                Navigator.of(context).pop();
-                final success = await provider.printOrderReceipt(order);
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(success ? 'Receipt sent to printer' : 'Print failed - check Bluetooth connection'),
-                      backgroundColor: success ? null : AppColors.errorRed,
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () async {
+                      Navigator.of(context).pop();
+                      final success = await provider.printOrderReceipt(order);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(success ? 'Receipt sent to printer' : 'Print failed - check Bluetooth connection'),
+                            backgroundColor: success ? null : AppColors.errorRed,
+                          ),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.print, size: 18),
+                    label: const Text('Print', style: TextStyle(fontSize: 12)),
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
-                  );
-                }
-              },
-              icon: const Icon(Icons.print),
-              label: const Text('Print Receipt'),
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () async {
+                      Navigator.of(context).pop();
+                      final success = await provider.sharePdfReceipt(order);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(success ? 'PDF receipt shared' : 'Failed to generate PDF'),
+                            backgroundColor: success ? null : AppColors.errorRed,
+                          ),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.picture_as_pdf, size: 18),
+                    label: const Text('PDF', style: TextStyle(fontSize: 12)),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.cokaAmber,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 10),
-            OutlinedButton.icon(
-              onPressed: () async {
-                await provider.refundOrder(order);
-                if (context.mounted) {
-                  Navigator.of(context).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Order #${order.tokenNumber} marked as refunded')),
-                  );
-                }
-              },
-              icon: const Icon(Icons.refresh),
-              label: const Text('Mark Refund'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.errorRed,
-                side: const BorderSide(color: AppColors.errorRed),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      await provider.refundOrder(order);
+                      if (context.mounted) {
+                        Navigator.of(context).pop();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Order #${order.tokenNumber} marked as refunded')),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.refresh, size: 18),
+                    label: const Text('Refund', style: TextStyle(fontSize: 12)),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.errorRed,
+                      side: const BorderSide(color: AppColors.errorRed),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      showDialog(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: const Text('Delete Order?'),
+                          content: Text('Delete order #${order.tokenNumber} for Rs.${order.totalAmount.toStringAsFixed(0)}? This cannot be undone.'),
+                          actions: [
+                            TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancel')),
+                            TextButton(
+                              onPressed: () async {
+                                Navigator.of(ctx).pop();
+                                await provider.deleteOrder(order);
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('Order #${order.tokenNumber} deleted')),
+                                  );
+                                }
+                              },
+                              style: TextButton.styleFrom(foregroundColor: AppColors.errorRed),
+                              child: const Text('Delete', style: TextStyle(fontWeight: FontWeight.bold)),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.delete_outline, size: 18),
+                    label: const Text('Delete', style: TextStyle(fontSize: 12)),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.errorRed,
+                      side: const BorderSide(color: AppColors.errorRed),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),

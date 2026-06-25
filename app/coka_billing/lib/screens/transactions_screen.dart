@@ -198,6 +198,22 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                                   ],
                                 ),
                               ),
+                              IconButton(
+                                onPressed: () async {
+                                  final ok = await provider.sharePdfReceipt(order);
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text(ok ? 'PDF shared' : 'PDF failed')),
+                                    );
+                                  }
+                                },
+                                icon: const Icon(Icons.picture_as_pdf, size: 20),
+                                color: AppColors.cokaAmber,
+                                tooltip: 'Share PDF',
+                                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                                padding: EdgeInsets.zero,
+                              ),
+                              const SizedBox(width: 4),
                               Text('\u20B9${order.totalAmount.toStringAsFixed(0)}',
                                   style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16,
                                       color: order.isRefunded ? AppColors.errorRed : AppColors.cokaRed)),

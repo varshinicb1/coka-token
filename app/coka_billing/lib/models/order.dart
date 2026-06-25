@@ -5,6 +5,8 @@ class Order {
   final double subTotal;
   final double taxAmount;
   final double totalAmount;
+  final double discountAmount;
+  final String? offerName;
   final String paymentMethod;
   final int timestamp;
   final String dateString;
@@ -25,6 +27,8 @@ class Order {
     required this.subTotal,
     required this.taxAmount,
     required this.totalAmount,
+    this.discountAmount = 0.0,
+    this.offerName,
     required this.paymentMethod,
     this.timestamp = 0,
     required this.dateString,
@@ -46,6 +50,8 @@ class Order {
     double? subTotal,
     double? taxAmount,
     double? totalAmount,
+    double? discountAmount,
+    String? offerName,
     String? paymentMethod,
     int? timestamp,
     String? dateString,
@@ -66,6 +72,8 @@ class Order {
         subTotal: subTotal ?? this.subTotal,
         taxAmount: taxAmount ?? this.taxAmount,
         totalAmount: totalAmount ?? this.totalAmount,
+        discountAmount: discountAmount ?? this.discountAmount,
+        offerName: offerName ?? this.offerName,
         paymentMethod: paymentMethod ?? this.paymentMethod,
         timestamp: timestamp ?? this.timestamp,
         dateString: dateString ?? this.dateString,
@@ -88,6 +96,8 @@ class Order {
         'subTotal': subTotal,
         'taxAmount': taxAmount,
         'totalAmount': totalAmount,
+        'discountAmount': discountAmount,
+        'offerName': offerName,
         'paymentMethod': paymentMethod,
         'timestamp': timestamp,
         'dateString': dateString,
@@ -109,6 +119,8 @@ class Order {
         subTotal: (map['subTotal'] as num).toDouble(),
         taxAmount: (map['taxAmount'] as num).toDouble(),
         totalAmount: (map['totalAmount'] as num).toDouble(),
+        discountAmount: (map['discountAmount'] as num?)?.toDouble() ?? 0.0,
+        offerName: map['offerName'] as String?,
         paymentMethod: map['paymentMethod'] as String,
         timestamp: map['timestamp'] as int? ?? 0,
         dateString: map['dateString'] as String,

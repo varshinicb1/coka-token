@@ -182,6 +182,11 @@ class AppDatabase {
     }
   }
 
+  Future<void> deleteOrder(int orderId) async {
+    final db = await database;
+    await orderStore.record(orderId).delete(db);
+  }
+
   Future<void> clearOrders() async {
     final db = await database;
     await orderStore.delete(db);

@@ -133,6 +133,17 @@ class FirestoreService {
     });
   }
 
+  Future<bool> deleteOrder(int id) async {
+    if (!_initialized) return false;
+    try {
+      await FirebaseFirestore.instance.collection('orders').doc(id.toString()).delete();
+      return true;
+    } catch (e, st) {
+      _log.warning('Firestore deleteOrder failed', e, st);
+      return false;
+    }
+  }
+
   // ─── Menu Items ───
 
   Future<bool> saveMenuItem(Map<String, dynamic> data) async {
