@@ -610,31 +610,31 @@ class ReceiptActionsDialog extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      showDialog(
+                    onPressed: () async {
+                      final confirm = await showDialog<bool>(
                         context: context,
                         builder: (ctx) => AlertDialog(
                           title: const Text('Delete Order?'),
                           content: Text('Delete order #${order.tokenNumber} for Rs.${order.totalAmount.toStringAsFixed(0)}? This cannot be undone.'),
                           actions: [
-                            TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancel')),
+                            TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
                             TextButton(
-                              onPressed: () async {
-                                Navigator.of(ctx).pop();
-                                await provider.deleteOrder(order);
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('Order #${order.tokenNumber} deleted')),
-                                  );
-                                }
-                              },
+                              onPressed: () => Navigator.of(ctx).pop(true),
                               style: TextButton.styleFrom(foregroundColor: AppColors.errorRed),
                               child: const Text('Delete', style: TextStyle(fontWeight: FontWeight.bold)),
                             ),
                           ],
                         ),
                       );
+                      if (confirm != true) return;
+                      if (!context.mounted) return;
+                      Navigator.of(context).pop();
+                      await provider.deleteOrder(order);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Order #${order.tokenNumber} deleted')),
+                        );
+                      }
                     },
                     icon: const Icon(Icons.delete_outline, size: 18),
                     label: const Text('Delete', style: TextStyle(fontSize: 12)),
