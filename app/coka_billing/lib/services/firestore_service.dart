@@ -4,6 +4,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:logging/logging.dart';
 import '../config/firebase_config.dart';
 import '../models/order.dart';
+import '../models/menu_item.dart';
+import '../models/expense.dart';
 
 final _log = Logger('FirestoreService');
 
@@ -16,6 +18,8 @@ class FirestoreService {
   bool _listening = false;
   bool _initInProgress = false;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _orderSubscription;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _menuSubscription;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _expenseSubscription;
 
   bool get isAvailable => _initialized;
 
@@ -74,6 +78,10 @@ class FirestoreService {
   void dispose() {
     _orderSubscription?.cancel();
     _orderSubscription = null;
+    _menuSubscription?.cancel();
+    _menuSubscription = null;
+    _expenseSubscription?.cancel();
+    _expenseSubscription = null;
     _listening = false;
   }
 
@@ -186,6 +194,27 @@ class FirestoreService {
     }
   }
 
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? listenMenuItems(void Function(List<MenuItem>) onUpdate) {
+    _menuSubscription?.cancel();
+    _menuSubscription = FirebaseFirestore.instance
+        .collection('menu_items')
+        .snapshots()
+        .listen((snapshot) {
+      final items = snapshot.docs.map((doc) {
+        try {
+          return MenuItem.fromMap(doc.data());
+        } catch (e) {
+          _log.warning('Failed to parse menu item from listener', e);
+          return null;
+        }
+      }).whereType<MenuItem>().toList();
+      onUpdate(items);
+    }, onError: (e) {
+      _log.warning('Menu listener error', e);
+    });
+    return _menuSubscription;
+  }
+
   // ─── Expenses ───
 
   Future<bool> saveExpense(Map<String, dynamic> data) async {
@@ -228,6 +257,27 @@ class FirestoreService {
     }
   }
 
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? listenExpenses(void Function(List<Expense>) onUpdate) {
+    _expenseSubscription?.cancel();
+    _expenseSubscription = FirebaseFirestore.instance
+        .collection('expenses')
+        .snapshots()
+        .listen((snapshot) {
+      final items = snapshot.docs.map((doc) {
+        try {
+          return Expense.fromMap(doc.data());
+        } catch (e) {
+          _log.warning('Failed to parse expense from listener', e);
+          return null;
+        }
+      }).whereType<Expense>().toList();
+      onUpdate(items);
+    }, onError: (e) {
+      _log.warning('Expense listener error', e);
+    });
+    return _expenseSubscription;
+  }
+
   // ─── Users ───
 
   Future<bool> saveUser(Map<String, dynamic> data) async {
@@ -255,6 +305,17 @@ class FirestoreService {
     } catch (e, st) {
       _log.warning('Firestore loadUsers failed', e, st);
       return null;
+    }
+  }
+
+  Future<bool> deleteUser(String username) async {
+    if (!_initialized) return false;
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(username).delete();
+      return true;
+    } catch (e, st) {
+      _log.warning('Firestore deleteUser failed', e, st);
+      return false;
     }
   }
 }

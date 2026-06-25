@@ -64,6 +64,9 @@ class AppProvider extends ChangeNotifier {
   bool _comPortRestoreInProgress = false;
   bool _printInProgress = false;
 
+  // Track order IDs confirmed deleted from cloud to prevent re-sync (Bug 4)
+  final Set<int> _confirmedDeletedOrderIds = {};
+
   // Data
   List<MenuItem> _menuItems = [];
   List<Order> _orders = [];
@@ -211,6 +214,8 @@ class AppProvider extends ChangeNotifier {
       if (connected) {
         await _syncAllFromCloud();
         _cloud.listenOrders(_onCloudOrdersChanged);
+        _cloud.listenMenuItems(_onCloudMenuChanged); // Bug 2
+        _cloud.listenExpenses(_onCloudExpensesChanged); // Bug 9
       }
     } catch (e, st) {
       _log.warning('Cloud init after login failed', e, st);
@@ -257,19 +262,25 @@ class AppProvider extends ChangeNotifier {
     try {
       final cloudOrders = await _cloud.loadOrders();
       if (cloudOrders != null && cloudOrders.isNotEmpty) {
-        final maxLocal = _orders.isEmpty ? 0 : _orders.map((o) => o.id ?? 0).reduce((a, b) => a > b ? a : b);
-        final newOrders = cloudOrders.where((m) {
-          final id = m['id'] as int? ?? 0;
-          return id > maxLocal || !_orders.any((o) => (o.id ?? 0) == id);
-        }).toList();
-        if (newOrders.isNotEmpty) {
-          for (final m in newOrders) {
+        int added = 0;
+        for (final m in cloudOrders) {
+          final id = m['id'] as int?;
+          if (id == null) continue;
+          // Skip orders confirmed deleted from cloud (Bug 4)
+          if (_confirmedDeletedOrderIds.contains(id)) continue;
+          final existingIdx = _orders.indexWhere((o) => o.id == id);
+          if (existingIdx == -1) {
             _orders.add(Order.fromMap(m));
+            added++;
+          } else {
+            _orders[existingIdx] = Order.fromMap(m);
           }
+        }
+        if (added > 0) {
           _orders.sort((a, b) => (a.id ?? 0).compareTo(b.id ?? 0));
           await _db.clearAndInsertOrders(_orders);
-          _log.info('Synced ${newOrders.length} orders from cloud');
         }
+        _log.info('Synced $added new orders from cloud');
       }
     } catch (e, st) {
       _log.warning('Cloud order sync failed', e, st);
@@ -278,11 +289,24 @@ class AppProvider extends ChangeNotifier {
     try {
       final cloudItems = await _cloud.loadMenuItems();
       if (cloudItems != null && cloudItems.isNotEmpty) {
-        _menuItems = cloudItems.map((m) => MenuItem.fromMap(m)).toList();
-        for (final item in _menuItems) {
-          if (item.id != null) await _db.updateMenuItem(item);
+        final localById = {for (final item in _menuItems) if (item.id != null) item.id: item};
+        for (final m in cloudItems) {
+          final cloudItem = MenuItem.fromMap(m);
+          final localItem = cloudItem.id != null ? localById[cloudItem.id] : null;
+          if (localItem != null) {
+            // Merge: keep local usedStock/remainingStock, update rest from cloud (Bug 1)
+            final merged = cloudItem.copyWith(
+              usedStock: localItem.usedStock,
+              remainingStock: localItem.remainingStock,
+            );
+            await _db.updateMenuItem(merged);
+          } else {
+            // New item from cloud, add locally
+            await _db.insertMenuItem(cloudItem);
+          }
         }
-        _log.info('Synced ${_menuItems.length} menu items from cloud');
+        _menuItems = await _db.getMenuItems();
+        _log.info('Merged ${cloudItems.length} menu items from cloud');
       }
     } catch (e, st) {
       _log.warning('Cloud menu sync failed', e, st);
@@ -291,8 +315,20 @@ class AppProvider extends ChangeNotifier {
     try {
       final cloudExpenses = await _cloud.loadExpenses();
       if (cloudExpenses != null && cloudExpenses.isNotEmpty) {
-        _expenses = cloudExpenses.map((m) => Expense.fromMap(m)).toList();
-        _log.info('Synced ${_expenses.length} expenses from cloud');
+        final localById = {for (final e in _expenses) if (e.id != null) e.id: e};
+        int added = 0;
+        for (final m in cloudExpenses) {
+          final expense = Expense.fromMap(m);
+          final localExpense = expense.id != null ? localById[expense.id] : null;
+          if (localExpense == null) {
+            await _db.insertExpense(expense);
+            added++;
+          }
+        }
+        if (added > 0) {
+          _expenses = await _db.getExpenses();
+        }
+        _log.info('Merged $added new expenses from cloud');
       }
     } catch (e, st) {
       _log.warning('Cloud expense sync failed', e, st);
@@ -319,6 +355,7 @@ class AppProvider extends ChangeNotifier {
         final existingIdx = ordersCopy.indexWhere((o) => o.id == newOrder.id);
         if (existingIdx != -1) {
           ordersCopy[existingIdx] = newOrder;
+          changed = true; // Bug 10: notify on updates too
         } else {
           ordersCopy.add(newOrder);
           changed = true;
@@ -331,6 +368,61 @@ class AppProvider extends ChangeNotifier {
       }
     } catch (e, st) {
       _log.warning('Cloud order update failed', e, st);
+    }
+  }
+
+  void _onCloudMenuChanged(List<MenuItem> incoming) {
+    try {
+      final localById = {for (final item in _menuItems) if (item.id != null) item.id: item};
+      bool changed = false;
+      for (final cloudItem in incoming) {
+        if (cloudItem.id == null) continue;
+        final localItem = localById[cloudItem.id];
+        if (localItem != null) {
+          // Merge: keep local stock, update rest from cloud (Bug 1)
+          final idx = _menuItems.indexWhere((i) => i.id == cloudItem.id);
+          if (idx != -1) {
+            final merged = cloudItem.copyWith(
+              usedStock: localItem.usedStock,
+              remainingStock: localItem.remainingStock,
+            );
+            _menuItems[idx] = merged;
+            _db.updateMenuItem(merged);
+            changed = true;
+          }
+        } else {
+          // New item from another device, add locally
+          _menuItems.add(cloudItem);
+          _db.insertMenuItem(cloudItem);
+          changed = true;
+        }
+      }
+      if (changed) {
+        _menuItems.sort((a, b) => a.name.compareTo(b.name));
+        notifyListeners();
+      }
+    } catch (e, st) {
+      _log.warning('Cloud menu update failed', e, st);
+    }
+  }
+
+  void _onCloudExpensesChanged(List<Expense> incoming) {
+    try {
+      final localById = {for (final e in _expenses) if (e.id != null) e.id: e};
+      bool changed = false;
+      for (final newExpense in incoming) {
+        if (newExpense.id == null || !localById.containsKey(newExpense.id)) {
+          _expenses.add(newExpense);
+          _db.insertExpense(newExpense);
+          changed = true;
+        }
+      }
+      if (changed) {
+        _expenses.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+        notifyListeners();
+      }
+    } catch (e, st) {
+      _log.warning('Cloud expense update failed', e, st);
     }
   }
 
@@ -580,6 +672,8 @@ class AppProvider extends ChangeNotifier {
       final orderId = await _db.insertOrder(order);
       final savedOrder = order.copyWith(id: orderId);
       await _deductStockForOrder(order.itemsText);
+      // Bug 3: push updated stock to cloud after deduction
+      await _syncMenuStockToCloud();
       _cloud.saveOrder(savedOrder.toMap());
       await refreshData();
       await _resetTokenInputToNextAuto();
@@ -628,8 +722,13 @@ class AppProvider extends ChangeNotifier {
 
   Future<void> deleteOrder(Order order) async {
     if (order.id == null) return;
-    await _db.deleteOrder(order.id!);
-    unawaited(_cloud.deleteOrder(order.id!));
+    final id = order.id!;
+    await _db.deleteOrder(id);
+    final ok = await _cloud.deleteOrder(id);
+    if (!ok) {
+      _confirmedDeletedOrderIds.add(id);
+      _log.warning('Cloud delete failed for order $id, added to local exclusion set');
+    }
     await refreshData();
     notifyListeners();
   }
@@ -680,7 +779,9 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> quickRestock(MenuItem item) async {
-    await _db.updateMenuItem(item.copyWith(usedStock: 0, remainingStock: item.openingStock));
+    final updated = item.copyWith(usedStock: 0, remainingStock: item.openingStock);
+    await _db.updateMenuItem(updated);
+    if (updated.id != null) unawaited(_cloud.saveMenuItem(updated.toMap())); // Bug 5
     await refreshData();
   }
 
@@ -707,12 +808,14 @@ class AppProvider extends ChangeNotifier {
   Future<void> createUser(User user) async {
     await _db.insertUser(user);
     await refreshData();
+    unawaited(_cloud.saveUser(user.toMap())); // Bug 6
   }
 
   Future<void> removeUser(User user) async {
     if (user.username == _currentUser?.username || user.username == 'admin') return;
     await _db.deleteUser(user);
     await refreshData();
+    unawaited(_cloud.deleteUser(user.username)); // Bug 7
   }
 
   // CSV Export
@@ -930,6 +1033,14 @@ class AppProvider extends ChangeNotifier {
         final newUsed = match.usedStock + qty;
         final newRemaining = (match.openingStock - newUsed).clamp(0, match.openingStock);
         await _db.updateMenuItem(match.copyWith(usedStock: newUsed, remainingStock: newRemaining));
+      }
+    }
+  }
+
+  Future<void> _syncMenuStockToCloud() async {
+    for (final item in _menuItems) {
+      if (item.id != null) {
+        unawaited(_cloud.saveMenuItem(item.toMap()));
       }
     }
   }
