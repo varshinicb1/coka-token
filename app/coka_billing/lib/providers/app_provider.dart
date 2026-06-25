@@ -685,9 +685,7 @@ class AppProvider extends ChangeNotifier {
       final orderId = await _db.insertOrder(order);
       final savedOrder = order.copyWith(id: orderId);
       await _deductStockForOrder(order.itemsText);
-      // Bug 3: push updated stock to cloud after deduction
-      await _syncMenuStockToCloud();
-      _cloud.saveOrder(savedOrder.toMap());
+      await _cloud.saveOrderWithStockTransaction(savedOrder, cartSnapshot);
       await refreshData();
       await _resetTokenInputToNextAuto();
 

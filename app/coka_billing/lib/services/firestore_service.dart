@@ -6,6 +6,7 @@ import '../config/firebase_config.dart';
 import '../models/order.dart';
 import '../models/menu_item.dart';
 import '../models/expense.dart';
+import '../models/cart_item.dart';
 
 final _log = Logger('FirestoreService');
 
@@ -15,8 +16,10 @@ class FirestoreService {
   FirestoreService._();
 
   bool _initialized = false;
-  bool _listening = false;
   bool _initInProgress = false;
+  bool _orderListening = false;
+  bool _menuListening = false;
+  bool _expenseListening = false;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _orderSubscription;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _menuSubscription;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _expenseSubscription;
@@ -48,9 +51,13 @@ class FirestoreService {
   }
 
   Future<bool> _ensureConnected() async {
+    try {
+      Firebase.app();
+    } catch (_) {
+      await Firebase.initializeApp(options: FirebaseConfig.toOptions());
+    }
     for (int attempt = 1; attempt <= 3; attempt++) {
       try {
-        await Firebase.initializeApp(options: FirebaseConfig.toOptions());
         await FirebaseFirestore.instance.collection('orders').limit(1).get().timeout(const Duration(seconds: 10));
         _initialized = true;
         _log.info('Firestore connected (attempt $attempt)');
@@ -60,17 +67,6 @@ class FirestoreService {
         if (attempt < 3) await Future.delayed(Duration(seconds: attempt * 2));
       }
     }
-
-    try {
-      Firebase.app();
-      await FirebaseFirestore.instance.collection('orders').limit(1).get().timeout(const Duration(seconds: 10));
-      _initialized = true;
-      _log.info('Firestore connected on retry after re-init');
-      return true;
-    } catch (e) {
-      _log.warning('Firestore final retry failed: $e');
-    }
-
     _initialized = false;
     return false;
   }
@@ -82,7 +78,9 @@ class FirestoreService {
     _menuSubscription = null;
     _expenseSubscription?.cancel();
     _expenseSubscription = null;
-    _listening = false;
+    _orderListening = false;
+    _menuListening = false;
+    _expenseListening = false;
   }
 
   // ─── Orders ───
@@ -102,13 +100,17 @@ class FirestoreService {
     }
   }
 
-  Future<List<Map<String, dynamic>>?> loadOrders() async {
+  Future<List<Map<String, dynamic>>?> loadOrders({int limit = 100, DocumentSnapshot<Map<String, dynamic>>? startAfter}) async {
     if (!_initialized) return null;
     try {
-      final snapshot = await FirebaseFirestore.instance
+      var query = FirebaseFirestore.instance
           .collection('orders')
           .orderBy('id', descending: true)
-          .get();
+          .limit(limit);
+      if (startAfter != null) {
+        query = query.startAfterDocument(startAfter);
+      }
+      final snapshot = await query.get();
       return snapshot.docs.map((d) => d.data()).toList();
     } catch (e, st) {
       _log.warning('Firestore loadOrders failed', e, st);
@@ -117,8 +119,8 @@ class FirestoreService {
   }
 
   void listenOrders(void Function(List<Order>) onUpdate) {
-    if (!_initialized || _listening) return;
-    _listening = true;
+    if (!_initialized || _orderListening) return;
+    _orderListening = true;
     _orderSubscription?.cancel();
     _orderSubscription = FirebaseFirestore.instance
         .collection('orders')
@@ -136,8 +138,26 @@ class FirestoreService {
       }).whereType<Order>().toList();
       if (orders.isNotEmpty) onUpdate(orders);
     }, onError: (e) {
-      _log.warning('Order listener error', e);
-      _listening = false;
+      _log.warning('Order listener error, scheduling reconnect', e);
+      _orderListening = false;
+      _scheduleReconnect('orders', onUpdate);
+    });
+  }
+
+  void _scheduleReconnect(String collection, dynamic onUpdate) {
+    Future.delayed(const Duration(seconds: 5), () {
+      if (!_initialized) return;
+      switch (collection) {
+        case 'orders':
+          if (!_orderListening) listenOrders(onUpdate as void Function(List<Order>));
+          break;
+        case 'menu_items':
+          if (!_menuListening) listenMenuItems(onUpdate as void Function(List<MenuItem>));
+          break;
+        case 'expenses':
+          if (!_expenseListening) listenExpenses(onUpdate as void Function(List<Expense>));
+          break;
+      }
     });
   }
 
@@ -148,6 +168,33 @@ class FirestoreService {
       return true;
     } catch (e, st) {
       _log.warning('Firestore deleteOrder failed', e, st);
+      return false;
+    }
+  }
+
+  Future<bool> saveOrderWithStockTransaction(Order order, List<CartItem> cartItems) async {
+    if (!_initialized) return false;
+    try {
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        final orderRef = FirebaseFirestore.instance.collection('orders').doc(order.id.toString());
+        transaction.set(orderRef, {...order.toMap(), 'syncedAt': FieldValue.serverTimestamp()}, SetOptions(merge: true));
+        for (final item in cartItems) {
+          final menuRef = FirebaseFirestore.instance.collection('menu_items').doc(item.itemId.toString());
+          final menuSnap = await transaction.get(menuRef);
+          if (menuSnap.exists) {
+            final currentUsed = (menuSnap.data()?['usedStock'] as num?)?.toInt() ?? 0;
+            final currentRemaining = (menuSnap.data()?['remainingStock'] as num?)?.toInt() ?? 0;
+            transaction.update(menuRef, {
+              'usedStock': currentUsed + item.quantity,
+              'remainingStock': (currentRemaining - item.quantity).clamp(0, 999999),
+              'syncedAt': FieldValue.serverTimestamp(),
+            });
+          }
+        }
+      });
+      return true;
+    } catch (e, st) {
+      _log.warning('Firestore transaction saveOrderWithStock failed', e, st);
       return false;
     }
   }
@@ -195,6 +242,8 @@ class FirestoreService {
   }
 
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? listenMenuItems(void Function(List<MenuItem>) onUpdate) {
+    if (!_initialized || _menuListening) return null;
+    _menuListening = true;
     _menuSubscription?.cancel();
     _menuSubscription = FirebaseFirestore.instance
         .collection('menu_items')
@@ -210,7 +259,9 @@ class FirestoreService {
       }).whereType<MenuItem>().toList();
       onUpdate(items);
     }, onError: (e) {
-      _log.warning('Menu listener error', e);
+      _log.warning('Menu listener error, scheduling reconnect', e);
+      _menuListening = false;
+      _scheduleReconnect('menu_items', onUpdate);
     });
     return _menuSubscription;
   }
@@ -258,6 +309,8 @@ class FirestoreService {
   }
 
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? listenExpenses(void Function(List<Expense>) onUpdate) {
+    if (!_initialized || _expenseListening) return null;
+    _expenseListening = true;
     _expenseSubscription?.cancel();
     _expenseSubscription = FirebaseFirestore.instance
         .collection('expenses')
@@ -273,7 +326,9 @@ class FirestoreService {
       }).whereType<Expense>().toList();
       onUpdate(items);
     }, onError: (e) {
-      _log.warning('Expense listener error', e);
+      _log.warning('Expense listener error, scheduling reconnect', e);
+      _expenseListening = false;
+      _scheduleReconnect('expenses', onUpdate);
     });
     return _expenseSubscription;
   }
