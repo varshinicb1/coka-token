@@ -158,7 +158,7 @@ class AppProvider extends ChangeNotifier {
 
   double get cartSubTotal => _cart.fold(0.0, (sum, item) => sum + item.total);
   double get cartTaxAmount => 0.0;
-  double get cartParcelCharges => _isParcel ? _cart.fold(0, (sum, item) => sum + item.quantity) * 10.0 : 0.0;
+  double get cartParcelCharges => _isParcel ? _cart.fold(0, (sum, item) => sum + item.quantity) * 5.0 : 0.0;
   double get cartTotal => cartSubTotal + cartParcelCharges;
 
   // Init
@@ -697,7 +697,7 @@ class AppProvider extends ChangeNotifier {
 
       final cartSnapshot = List<CartItem>.from(_cart);
       final itemTotal = cartSnapshot.fold(0.0, (sum, item) => sum + item.total);
-      final parcelCharges = _isParcel ? cartSnapshot.fold(0, (sum, item) => sum + item.quantity) * 10.0 : 0.0;
+      final parcelCharges = _isParcel ? cartSnapshot.fold(0, (sum, item) => sum + item.quantity) * 5.0 : 0.0;
       final totalAmount = itemTotal + parcelCharges;
 
       final order = Order(

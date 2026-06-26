@@ -310,13 +310,13 @@ class BillingScreen extends StatelessWidget {
                         activeColor: theme.colorScheme.primary,
                       ),
                       Text(
-                        'Parcel (Rs.10/item)',
+                        'Parcel (Rs.5/item)',
                         style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: theme.colorScheme.onSurface),
                       ),
                       const SizedBox(width: 8),
                       if (provider.isParcel)
                         Text(
-                          '+Rs.${(provider.cart.fold(0, (sum, item) => sum + item.quantity) * 10).toStringAsFixed(2)}',
+                          '+Rs.${(provider.cart.fold(0, (sum, item) => sum + item.quantity) * 5).toStringAsFixed(2)}',
                           style: TextStyle(fontSize: 13, color: theme.colorScheme.primary, fontWeight: FontWeight.bold),
                         ),
                     ],
