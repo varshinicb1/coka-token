@@ -28,6 +28,9 @@ class ReceiptFormatter {
     }
     lines.add('------------------------------');
     lines.add('Subtotal          Rs.${order.subTotal.toStringAsFixed(0).padLeft(7)}');
+    if (order.parcelCharges > 0) {
+      lines.add('Parcel Charges    Rs.${order.parcelCharges.toStringAsFixed(0).padLeft(7)}');
+    }
     lines.add('------------------------------');
     lines.add('TOTAL             Rs.${order.totalAmount.toStringAsFixed(0).padLeft(7)}');
     lines.add('------------------------------');

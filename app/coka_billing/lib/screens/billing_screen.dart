@@ -301,6 +301,28 @@ class BillingScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 12),
 
+                  // Parcel Toggle
+                  Row(
+                    children: [
+                      Checkbox(
+                        value: provider.isParcel,
+                        onChanged: (val) => provider.setParcel(val ?? false),
+                        activeColor: theme.colorScheme.primary,
+                      ),
+                      Text(
+                        'Parcel (Rs.10/item)',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: theme.colorScheme.onSurface),
+                      ),
+                      const SizedBox(width: 8),
+                      if (provider.isParcel)
+                        Text(
+                          '+Rs.${(provider.cart.fold(0, (sum, item) => sum + item.quantity) * 10).toStringAsFixed(2)}',
+                          style: TextStyle(fontSize: 13, color: theme.colorScheme.primary, fontWeight: FontWeight.bold),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+
                   // Payment Method
                   Row(
                     children: [

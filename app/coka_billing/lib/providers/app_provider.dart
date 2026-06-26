@@ -78,6 +78,7 @@ class AppProvider extends ChangeNotifier {
   String _tokenInput = '';
   final TextEditingController tokenController = TextEditingController();
   String _selectedPaymentMethod = 'UPI';
+  bool _isParcel = false;
   Order? _activeOrderForReceipt;
 
   // Search
@@ -130,6 +131,12 @@ class AppProvider extends ChangeNotifier {
   String get themeStyle => _themeStyle;
   String get upiId => _upiId;
   String get upiMerchantName => 'COKA COIMBATORE ORIGINAL KAALAN ADDA';
+  bool get isParcel => _isParcel;
+
+  void setParcel(bool value) {
+    _isParcel = value;
+    notifyListeners();
+  }
 
   double get todaySales => _orders.where((o) => o.dateString == date_utils.DateUtils.getTodayDateString() && !o.isRefunded).fold(0.0, (s, o) => s + o.totalAmount);
   double get todayExpensesTotal => _expenses.where((e) => e.dateString == date_utils.DateUtils.getTodayDateString()).fold(0.0, (s, e) => s + e.amount);
@@ -151,7 +158,8 @@ class AppProvider extends ChangeNotifier {
 
   double get cartSubTotal => _cart.fold(0.0, (sum, item) => sum + item.total);
   double get cartTaxAmount => 0.0;
-  double get cartTotal => cartSubTotal;
+  double get cartParcelCharges => _isParcel ? _cart.fold(0, (sum, item) => sum + item.quantity) * 10.0 : 0.0;
+  double get cartTotal => cartSubTotal + cartParcelCharges;
 
   // Init
   Future<void> init() async {
@@ -225,10 +233,12 @@ class AppProvider extends ChangeNotifier {
     try {
       final connected = await _cloud.init(force: true);
       if (connected) {
-        await _syncAllFromCloud();
+        // Set up listeners FIRST to catch real-time updates
         _cloud.listenOrders(_onCloudOrdersChanged);
-        _cloud.listenMenuItems(_onCloudMenuChanged); // Bug 2
-        _cloud.listenExpenses(_onCloudExpensesChanged); // Bug 9
+        _cloud.listenMenuItems(_onCloudMenuChanged);
+        _cloud.listenExpenses(_onCloudExpensesChanged);
+        // Then do initial paginated sync
+        await _syncAllFromCloud();
       }
     } catch (e, st) {
       _log.warning('Cloud init after login failed', e, st);
@@ -273,7 +283,7 @@ class AppProvider extends ChangeNotifier {
     }
 
     try {
-      final cloudOrders = await _cloud.loadOrders();
+      final cloudOrders = await _cloud.loadOrders(limit: 100);
       if (cloudOrders != null && cloudOrders.isNotEmpty) {
         int added = 0;
         for (final m in cloudOrders) {
@@ -300,7 +310,7 @@ class AppProvider extends ChangeNotifier {
     }
 
     try {
-      final cloudItems = await _cloud.loadMenuItems();
+      final cloudItems = await _cloud.loadMenuItems(limit: 200);
       if (cloudItems != null && cloudItems.isNotEmpty) {
         final localById = {for (final item in _menuItems) if (item.id != null) item.id: item};
         for (final m in cloudItems) {
@@ -326,7 +336,7 @@ class AppProvider extends ChangeNotifier {
     }
 
     try {
-      final cloudExpenses = await _cloud.loadExpenses();
+      final cloudExpenses = await _cloud.loadExpenses(limit: 100);
       if (cloudExpenses != null && cloudExpenses.isNotEmpty) {
         final localById = {for (final e in _expenses) if (e.id != null) e.id: e};
         int added = 0;
@@ -686,12 +696,16 @@ class AppProvider extends ChangeNotifier {
       final tokenPhrase = TokenPhrases.list[tokenSlot - 1];
 
       final cartSnapshot = List<CartItem>.from(_cart);
+      final itemTotal = cartSnapshot.fold(0.0, (sum, item) => sum + item.total);
+      final parcelCharges = _isParcel ? cartSnapshot.fold(0, (sum, item) => sum + item.quantity) * 10.0 : 0.0;
+      final totalAmount = itemTotal + parcelCharges;
+
       final order = Order(
         tokenNumber: enteredToken,
         itemsText: CartSerializer.serialize(cartSnapshot),
-        subTotal: cartSnapshot.fold(0.0, (sum, item) => sum + item.total),
+        subTotal: itemTotal,
         taxAmount: 0.0,
-        totalAmount: cartSnapshot.fold(0.0, (sum, item) => sum + item.total),
+        totalAmount: totalAmount,
         paymentMethod: finalPayment,
         timestamp: DateTime.now().millisecondsSinceEpoch,
         dateString: date_utils.DateUtils.getTodayDateString(),
@@ -700,6 +714,7 @@ class AppProvider extends ChangeNotifier {
         gatewayStatus: gatewayStatus,
         tokenSlot: tokenSlot,
         tokenPhrase: tokenPhrase,
+        parcelCharges: parcelCharges,
       );
 
       final orderId = await _db.insertOrder(order);

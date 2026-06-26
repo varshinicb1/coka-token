@@ -216,13 +216,14 @@ class FirestoreService {
     }
   }
 
-  Future<List<Map<String, dynamic>>?> loadMenuItems() async {
+  Future<List<Map<String, dynamic>>?> loadMenuItems({int? limit}) async {
     if (!_initialized) return null;
     try {
-      final snapshot = await FirebaseFirestore.instance
+      var query = FirebaseFirestore.instance
           .collection('menu_items')
-          .orderBy('name')
-          .get();
+          .orderBy('name');
+      if (limit != null) query = query.limit(limit);
+      final snapshot = await query.get();
       return snapshot.docs.map((d) => d.data()).toList();
     } catch (e, st) {
       _log.warning('Firestore loadMenuItems failed', e, st);
@@ -283,13 +284,14 @@ class FirestoreService {
     }
   }
 
-  Future<List<Map<String, dynamic>>?> loadExpenses() async {
+  Future<List<Map<String, dynamic>>?> loadExpenses({int? limit}) async {
     if (!_initialized) return null;
     try {
-      final snapshot = await FirebaseFirestore.instance
+      var query = FirebaseFirestore.instance
           .collection('expenses')
-          .orderBy('timestamp', descending: true)
-          .get();
+          .orderBy('timestamp', descending: true);
+      if (limit != null) query = query.limit(limit);
+      final snapshot = await query.get();
       return snapshot.docs.map((d) => d.data()).toList();
     } catch (e, st) {
       _log.warning('Firestore loadExpenses failed', e, st);

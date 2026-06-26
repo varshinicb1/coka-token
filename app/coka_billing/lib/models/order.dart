@@ -19,6 +19,7 @@ class Order {
   final String? bankStatementMatchId;
   final int tokenSlot;
   final String tokenPhrase;
+  final double parcelCharges;
 
   Order({
     this.id,
@@ -41,6 +42,7 @@ class Order {
     this.bankStatementMatchId,
     this.tokenSlot = 1,
     this.tokenPhrase = '',
+    this.parcelCharges = 0.0,
   });
 
   Order copyWith({
@@ -64,6 +66,7 @@ class Order {
     String? bankStatementMatchId,
     int? tokenSlot,
     String? tokenPhrase,
+    double? parcelCharges,
   }) =>
       Order(
         id: id ?? this.id,
@@ -87,6 +90,7 @@ class Order {
             bankStatementMatchId ?? this.bankStatementMatchId,
         tokenSlot: tokenSlot ?? this.tokenSlot,
         tokenPhrase: tokenPhrase ?? this.tokenPhrase,
+        parcelCharges: parcelCharges ?? this.parcelCharges,
       );
 
   Map<String, dynamic> toMap() => {
@@ -110,6 +114,7 @@ class Order {
         'bankStatementMatchId': bankStatementMatchId,
         'tokenSlot': tokenSlot,
         'tokenPhrase': tokenPhrase,
+        'parcelCharges': parcelCharges,
       };
 
   factory Order.fromMap(Map<String, dynamic> map) => Order(
@@ -133,5 +138,6 @@ class Order {
         bankStatementMatchId: map['bankStatementMatchId'] as String?,
         tokenSlot: map['tokenSlot'] as int? ?? 1,
         tokenPhrase: map['tokenPhrase'] as String? ?? '',
+        parcelCharges: (map['parcelCharges'] as num?)?.toDouble() ?? 0.0,
       );
 }
