@@ -80,6 +80,7 @@ class AppProvider extends ChangeNotifier {
   String _selectedPaymentMethod = 'UPI';
   bool _isParcel = false;
   Order? _activeOrderForReceipt;
+  String? _checkoutError;
 
   // Search
   String _searchQuery = '';
@@ -132,6 +133,7 @@ class AppProvider extends ChangeNotifier {
   String get upiId => _upiId;
   String get upiMerchantName => 'COKA COIMBATORE ORIGINAL KAALAN ADDA';
   bool get isParcel => _isParcel;
+  String? get checkoutError => _checkoutError;
 
   void setParcel(bool value) {
     _isParcel = value;
@@ -170,6 +172,12 @@ class AppProvider extends ChangeNotifier {
       await _ensureFinalMenuItems();
       await _cloud.init();
 
+      // Load local data FIRST before any cloud sync.
+      // This ensures _orders has all local orders (including today's)
+      // before the auth listener or explicit sync runs.
+      await refreshData();
+      await _resetTokenInputToNextAuto();
+
       // Check persistent login BEFORE setting up auth listener
       // to avoid race between immediate auth state and delayed listener
       final wasAlreadySignedIn = _authService.isSignedIn;
@@ -189,9 +197,6 @@ class AppProvider extends ChangeNotifier {
           _log.warning('Auth state handler error', e, st);
         }
       });
-
-      await refreshData();
-      await _resetTokenInputToNextAuto();
 
       // Handle persistent session if already signed in
       if (wasAlreadySignedIn && signedInEmail.isNotEmpty && _currentUser == null) {
@@ -289,19 +294,26 @@ class AppProvider extends ChangeNotifier {
         for (final m in cloudOrders) {
           final id = m['id'] as int?;
           if (id == null) continue;
-          // Skip orders confirmed deleted from cloud (Bug 4)
           if (_confirmedDeletedOrderIds.contains(id)) continue;
           final existingIdx = _orders.indexWhere((o) => o.id == id);
           if (existingIdx == -1) {
             _orders.add(Order.fromMap(m));
             added++;
-          } else {
-            _orders[existingIdx] = Order.fromMap(m);
           }
+          // Do NOT overwrite local orders with cloud data — local is source of truth.
+          // Cloud stale data can wipe today's orders (Bug fix).
         }
         if (added > 0) {
           _orders.sort((a, b) => (a.id ?? 0).compareTo(b.id ?? 0));
-          await _db.clearAndInsertOrders(_orders);
+          // Save only new cloud orders to local DB without wiping existing orders.
+          for (final cloudOrder in cloudOrders) {
+            final id = cloudOrder['id'] as int?;
+            if (id == null) continue;
+            final existingLocal = await _db.getOrderById(id);
+            if (existingLocal == null) {
+              await _db.insertOrder(Order.fromMap(cloudOrder));
+            }
+          }
         }
         _log.info('Synced $added new orders from cloud');
       }
@@ -392,21 +404,19 @@ class AppProvider extends ChangeNotifier {
 
   void _onCloudOrdersChanged(List<Order> incoming) {
     try {
-      final ordersCopy = List<Order>.from(_orders);
       bool changed = false;
       for (final newOrder in incoming) {
-        final existingIdx = ordersCopy.indexWhere((o) => o.id == newOrder.id);
-        if (existingIdx != -1) {
-          ordersCopy[existingIdx] = newOrder;
-          changed = true; // Bug 10: notify on updates too
-        } else {
-          ordersCopy.add(newOrder);
+        final existingIdx = _orders.indexWhere((o) => o.id == newOrder.id);
+        if (existingIdx == -1) {
+          _orders.add(newOrder);
           changed = true;
         }
+        // Do NOT overwrite existing orders with cloud data.
+        // Local is the source of truth (Bug fix: prevents stale cloud data
+        // from wiping today's orders that haven't synced to cloud yet).
       }
       if (changed) {
-        ordersCopy.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-        _orders = ordersCopy;
+        _orders.sort((a, b) => b.timestamp.compareTo(a.timestamp));
         notifyListeners();
       }
     } catch (e, st) {
@@ -732,8 +742,12 @@ class AppProvider extends ChangeNotifier {
       }
 
       notifyListeners();
+      _checkoutError = null;
     } catch (e, st) {
       _log.warning('Checkout failed', e, st);
+      _checkoutError = 'Checkout failed: $e. Your cart items were saved locally but cloud sync may have failed. Please try again.';
+      // Keep _cart intact so user can retry — don't clear on failure
+      notifyListeners();
     } finally {
       _checkoutInProgress = false;
     }

@@ -243,6 +243,15 @@ class AppDatabase {
     }).toList();
   }
 
+  Future<Order?> getOrderById(int id) async {
+    final db = await database;
+    final record = await orderStore.record(id).get(db);
+    if (record == null) return null;
+    final map = Map<String, dynamic>.from(record);
+    map['id'] = id;
+    return Order.fromMap(map);
+  }
+
   Future<List<Order>> getOrdersByDate(String dateString) async {
     final db = await database;
     final records = await orderStore.find(
