@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main, opening-day-offer]
 
+defaults:
+  run:
+    working-directory: app/coka_billing
+
 jobs:
   test:
     name: Test & Analyze

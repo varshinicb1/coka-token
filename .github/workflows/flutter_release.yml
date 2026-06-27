@@ -8,6 +8,10 @@ on:
 permissions:
   contents: write
 
+defaults:
+  run:
+    working-directory: app/coka_billing
+
 jobs:
   test:
     name: Test
