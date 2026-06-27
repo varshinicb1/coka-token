@@ -1,6 +1,8 @@
 # Only track the current Flutter app
 /*
 !/app
+!/coka logo.jpeg
+!/.github
 /app/*
 !/app/coka_billing
 
