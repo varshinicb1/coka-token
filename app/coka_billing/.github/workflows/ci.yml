@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, opening-day-offer]
   pull_request:
-    branches: [main, master]
+    branches: [main, opening-day-offer]
 
 jobs:
   analyze-and-test:

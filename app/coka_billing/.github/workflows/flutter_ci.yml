@@ -2,9 +2,9 @@ name: Flutter CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, opening-day-offer]
   pull_request:
-    branches: [main]
+    branches: [main, opening-day-offer]
 
 jobs:
   test:
